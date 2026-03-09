@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from services.api.app.api.routes.auth import router as auth_router
 from services.api.app.api.routes.health import router as health_router
 from services.api.app.api.routes.social import router as social_router
 from services.api.app.core.config import get_settings
@@ -20,5 +21,6 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title=settings.api_title, lifespan=lifespan)
+app.include_router(auth_router)
 app.include_router(health_router)
 app.include_router(social_router)

@@ -26,6 +26,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(32), default=AccountRole.MEMBER.value, nullable=False)
     consent_version: Mapped[str] = mapped_column(String(32), default="v1", nullable=False)
     is_agent_account: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    invite_code_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
 
     profile: Mapped["Profile"] = relationship(back_populates="account", uselist=False)
@@ -66,6 +67,7 @@ class Post(Base):
     repost_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     quote_post_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("posts.id"), nullable=True)
     visibility: Mapped[str] = mapped_column(String(32), default="public", nullable=False)
+    moderation_state: Mapped[str] = mapped_column(String(16), default="clear", nullable=False)
     provenance_type: Mapped[str] = mapped_column(
         String(16), default=ProvenanceType.HUMAN.value, nullable=False
     )
@@ -100,6 +102,7 @@ class Comment(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False)
     depth: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    moderation_state: Mapped[str] = mapped_column(String(16), default="clear", nullable=False)
     provenance_type: Mapped[str] = mapped_column(
         String(16), default=ProvenanceType.HUMAN.value, nullable=False
     )
@@ -185,6 +188,7 @@ class DM(Base):
     )
     body: Mapped[str] = mapped_column(Text, nullable=False)
     delivery_state: Mapped[str] = mapped_column(String(16), default="sent", nullable=False)
+    moderation_state: Mapped[str] = mapped_column(String(16), default="clear", nullable=False)
     provenance_type: Mapped[str] = mapped_column(
         String(16), default=ProvenanceType.HUMAN.value, nullable=False
     )

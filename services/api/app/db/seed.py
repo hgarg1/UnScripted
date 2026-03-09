@@ -1,5 +1,6 @@
 from sqlalchemy import select
 
+from services.api.app.models.auth import InviteCode
 from services.api.app.db.base import Base
 from services.api.app.db.session import SessionLocal, engine
 from services.api.app.models.agent import Agent
@@ -21,6 +22,14 @@ def seed() -> None:
             )
             session.add(admin)
             session.add(Profile(account=admin, bio="Runs the simulation control plane."))
+
+        for code, role, max_uses in [
+            ("ADMIN-ROOT", "admin", 10),
+            ("UNSCRIPTED-ALPHA", "member", 250),
+        ]:
+            invite = session.scalar(select(InviteCode).where(InviteCode.code == code))
+            if not invite:
+                session.add(InviteCode(code=code, role=role, max_uses=max_uses))
 
         for handle, archetype, body in [
             ("ember_signal", "booster", "Consensus does not need to be real to feel real."),

@@ -9,6 +9,7 @@ class UserProfileResponse(BaseModel):
     display_name: str
     role: str
     bio: str = ""
+    declared_interests: list[str] = []
     is_agent_account: bool = False
 
 
@@ -41,11 +42,19 @@ class CreateUserRequest(BaseModel):
     bio: str = Field(default="", max_length=280)
 
 
+class UpdateProfileRequest(BaseModel):
+    display_name: str | None = Field(default=None, min_length=1, max_length=120)
+    bio: str | None = Field(default=None, max_length=280)
+    declared_interests: list[str] | None = None
+    location_hint: str | None = Field(default=None, max_length=120)
+
+
 class PostResponse(BaseModel):
     id: str
     author_account_id: str
     body: str
     provenance_type: str
+    moderation_state: str
     created_at: datetime
     like_count: int
     reply_count: int
@@ -73,6 +82,66 @@ class FeedItemResponse(BaseModel):
 
 class FeedResponse(BaseModel):
     items: list[FeedItemResponse]
+    next_cursor: str | None = None
+
+
+class AccountSummaryResponse(BaseModel):
+    id: str
+    handle: str
+    display_name: str
+    bio: str
+    is_agent_account: bool
+    is_following: bool
+
+
+class AccountDiscoveryResponse(BaseModel):
+    items: list[AccountSummaryResponse]
+
+
+class CommentResponse(BaseModel):
+    id: str
+    post_id: str
+    author_account_id: str
+    body: str
+    moderation_state: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CommentsResponse(BaseModel):
+    items: list[CommentResponse]
+
+
+class DirectMessageResponse(BaseModel):
+    id: str
+    thread_id: str
+    sender_account_id: str
+    recipient_account_id: str
+    body: str
+    moderation_state: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ThreadResponse(BaseModel):
+    items: list[DirectMessageResponse]
+
+
+class ModerationSignalResponse(BaseModel):
+    id: str
+    content_type: str
+    content_id: str
+    signal_type: str
+    score: float
+    source: str
+    status: str
+    created_at: datetime
+
+
+class ModerationQueueResponse(BaseModel):
+    items: list[ModerationSignalResponse]
 
 
 class AdminOverviewResponse(BaseModel):

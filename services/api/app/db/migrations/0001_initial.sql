@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   role varchar(32) NOT NULL,
   consent_version varchar(32) NOT NULL,
   is_agent_account boolean NOT NULL DEFAULT false,
+  invite_code_id varchar(36),
   created_at timestamptz NOT NULL
 );
 
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS posts (
   repost_count integer NOT NULL,
   quote_post_id varchar(36) REFERENCES posts(id),
   visibility varchar(32) NOT NULL,
+  moderation_state varchar(16) NOT NULL DEFAULT 'clear',
   provenance_type varchar(16) NOT NULL,
   actor_origin varchar(16) NOT NULL,
   content_origin varchar(16) NOT NULL,
@@ -50,6 +52,7 @@ CREATE TABLE IF NOT EXISTS comments (
   body text NOT NULL,
   depth integer NOT NULL,
   like_count integer NOT NULL,
+  moderation_state varchar(16) NOT NULL DEFAULT 'clear',
   provenance_type varchar(16) NOT NULL,
   created_at timestamptz NOT NULL
 );
@@ -70,8 +73,42 @@ CREATE TABLE IF NOT EXISTS dms (
   recipient_account_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   body text NOT NULL,
   delivery_state varchar(16) NOT NULL,
+  moderation_state varchar(16) NOT NULL DEFAULT 'clear',
   provenance_type varchar(16) NOT NULL,
   created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS invite_codes (
+  id varchar(36) PRIMARY KEY,
+  code varchar(64) NOT NULL UNIQUE,
+  created_by_user_id varchar(36) REFERENCES users(id) ON DELETE SET NULL,
+  role varchar(32) NOT NULL,
+  metadata_json jsonb NOT NULL,
+  max_uses integer NOT NULL,
+  use_count integer NOT NULL,
+  expires_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS session_tokens (
+  id varchar(36) PRIMARY KEY,
+  user_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash varchar(128) NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL,
+  last_used_at timestamptz,
+  revoked_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  id varchar(36) PRIMARY KEY,
+  actor_id varchar(36) NOT NULL,
+  key varchar(128) NOT NULL,
+  request_hash varchar(128) NOT NULL,
+  response_json jsonb NOT NULL,
+  status_code integer NOT NULL,
+  created_at timestamptz NOT NULL,
+  UNIQUE (actor_id, key)
 );
 
 CREATE TABLE IF NOT EXISTS events (

@@ -1,4 +1,5 @@
 from services.api.app.models.agent import Agent, Faction, Relationship
+from services.api.app.models.auth import IdempotencyKeyRecord, InviteCode, SessionToken
 from services.api.app.models.enums import AccountRole, AccountStatus, EventType, OutboxStatus, ProvenanceType
 from services.api.app.models.eventing import Event, OutboxMessage
 from services.api.app.models.ml import FeatureSnapshot, InferenceLog, ModelEvaluation, ModelVersion, ModerationSignal, TrendSnapshot
@@ -15,7 +16,9 @@ __all__ = [
     "Faction",
     "FeatureSnapshot",
     "Follow",
+    "IdempotencyKeyRecord",
     "InferenceLog",
+    "InviteCode",
     "Like",
     "ModelEvaluation",
     "ModelVersion",
@@ -27,6 +30,7 @@ __all__ = [
     "ProvenanceType",
     "Relationship",
     "Repost",
+    "SessionToken",
     "TrendSnapshot",
     "User",
 ]

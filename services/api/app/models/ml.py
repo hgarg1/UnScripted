@@ -31,6 +31,33 @@ class FeatureSnapshot(Base):
     source_window: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
+class ConsumerCheckpoint(Base):
+    __tablename__ = "consumer_checkpoints"
+
+    consumer_name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_outbox_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    last_event_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    processed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+
+class DatasetManifest(Base):
+    __tablename__ = "dataset_manifests"
+    __table_args__ = (Index("ix_dataset_manifests_model_created_at", "model_name", "created_at"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    model_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    dataset_ref: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    provenance_policy: Mapped[str] = mapped_column(String(64), nullable=False)
+    feature_set_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="materialized", nullable=False)
+    manifest_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
 class ModelVersion(Base):
     __tablename__ = "model_versions"
     __table_args__ = (Index("ix_model_versions_name_registry_state", "model_name", "registry_state"),)

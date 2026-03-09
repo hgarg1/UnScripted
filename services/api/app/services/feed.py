@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Iterable
 
 from sqlalchemy import and_, desc, or_, select
@@ -14,17 +14,7 @@ from services.api.app.schemas.social import (
     FeedResponse,
     PostResponse,
 )
-
-
-def _age_hours(created_at: datetime) -> float:
-    delta = datetime.now(UTC) - created_at.astimezone(UTC)
-    return max(delta.total_seconds() / 3600, 0.0)
-
-
-def _score_post(post: Post) -> float:
-    recency_penalty = _age_hours(post.created_at) * 0.15
-    engagement_bonus = post.like_count + (post.reply_count * 1.5) + (post.repost_count * 1.25)
-    return max(0.1, 10.0 + engagement_bonus - recency_penalty)
+from services.api.app.services.ml import latest_model_version, log_feed_rankings, rank_post_for_viewer
 
 
 def encode_feed_cursor(post: Post) -> str:
@@ -63,14 +53,35 @@ def build_home_feed(session: Session, *, viewer_id: str, limit: int = 25, cursor
     if not rows:
         return FeedResponse(items=[], next_cursor=None)
 
-    ranked = sorted(rows, key=lambda row: _score_post(row[0]), reverse=True)[:limit]
+    followed_lookup = set(followed_ids)
+    scored_rows = []
+    for post, author in rows:
+        score, reason, features = rank_post_for_viewer(
+            session,
+            post=post,
+            viewer_id=viewer_id,
+            viewer_follows_author=post.author_account_id in followed_lookup,
+        )
+        scored_rows.append((post, author, score, reason, features))
+
+    scored_rows.sort(key=lambda row: row[2], reverse=True)
+    ranked = scored_rows[:limit]
+    active_model = latest_model_version(session, model_name="feed-ranker", registry_states=("active",))
+    shadow_model = latest_model_version(session, model_name="feed-ranker", registry_states=("shadow",))
+    log_feed_rankings(
+        session,
+        viewer_id=viewer_id,
+        ranked_posts=[(post, score, reason, features) for post, _, score, reason, features in ranked],
+        active_model=active_model,
+        shadow_model=shadow_model,
+    )
     items = [
         FeedItemResponse(
             post=PostResponse.model_validate(post),
             author=FeedAuthorResponse(id=author.id, handle=author.handle, display_name=author.display_name),
-            rank=FeedRankResponse(score=_score_post(post), reason="deterministic-v1"),
+            rank=FeedRankResponse(score=score, reason=reason),
         )
-        for post, author in ranked
+        for post, author, score, reason, _ in ranked
     ]
     next_cursor = encode_feed_cursor(ranked[-1][0]) if len(ranked) == limit else None
     return FeedResponse(items=items, next_cursor=next_cursor)

@@ -55,6 +55,41 @@ type AgentTurnLog = {
   created_at: string;
 };
 
+type DatasetManifest = {
+  id: string;
+  model_name: string;
+  dataset_ref: string;
+  row_count: number;
+  provenance_policy: string;
+};
+
+type ModelVersion = {
+  id: string;
+  model_name: string;
+  task_type: string;
+  registry_state: string;
+  feature_set_version: string;
+  metrics_json: Record<string, number | string>;
+};
+
+type TrendSnapshot = {
+  id: string;
+  topic_key: string;
+  volume: number;
+  synthetic_share: number;
+  coordination_score: number;
+  promoted: boolean;
+};
+
+type InferenceLog = {
+  id: string;
+  task_type: string;
+  subject_type: string;
+  subject_id: string;
+  decision_path: string;
+  created_at: string;
+};
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -89,6 +124,10 @@ export function AdminShell() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [cohorts, setCohorts] = useState<AgentCohort[]>([]);
   const [prompts, setPrompts] = useState<AgentPrompt[]>([]);
+  const [datasets, setDatasets] = useState<DatasetManifest[]>([]);
+  const [models, setModels] = useState<ModelVersion[]>([]);
+  const [trends, setTrends] = useState<TrendSnapshot[]>([]);
+  const [inferenceLogs, setInferenceLogs] = useState<InferenceLog[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentMemories, setAgentMemories] = useState<AgentMemory[]>([]);
   const [agentTurns, setAgentTurns] = useState<AgentTurnLog[]>([]);
@@ -112,7 +151,17 @@ export function AdminShell() {
 
   async function refresh(activeToken: string) {
     try {
-      const [nextOverview, nextInvites, nextSignals, nextAgents, nextCohorts, nextPrompts] = await Promise.all([
+      const [
+        nextOverview,
+        nextInvites,
+        nextSignals,
+        nextAgents,
+        nextCohorts,
+        nextPrompts,
+        nextRegistry,
+        nextTrends,
+        nextLogs
+      ] = await Promise.all([
         apiFetch<{
           total_users: number;
           total_agents: number;
@@ -124,7 +173,10 @@ export function AdminShell() {
         apiFetch<{ items: ModerationSignal[] }>("/v1/admin/moderation-signals", activeToken),
         apiFetch<{ items: Agent[] }>("/v1/admin/agents", activeToken),
         apiFetch<AgentCohort[]>("/v1/admin/agent-cohorts", activeToken),
-        apiFetch<AgentPrompt[]>("/v1/admin/agent-prompts", activeToken)
+        apiFetch<AgentPrompt[]>("/v1/admin/agent-prompts", activeToken),
+        apiFetch<{ datasets: DatasetManifest[]; models: ModelVersion[] }>("/v1/admin/models", activeToken),
+        apiFetch<TrendSnapshot[]>("/v1/admin/trends", activeToken),
+        apiFetch<InferenceLog[]>("/v1/admin/inference-logs", activeToken)
       ]);
       setOverview(nextOverview);
       setInvites(nextInvites);
@@ -132,6 +184,10 @@ export function AdminShell() {
       setAgents(nextAgents.items);
       setCohorts(nextCohorts);
       setPrompts(nextPrompts);
+      setDatasets(nextRegistry.datasets);
+      setModels(nextRegistry.models);
+      setTrends(nextTrends);
+      setInferenceLogs(nextLogs);
       if (!selectedAgentId && nextAgents.items.length) {
         setSelectedAgentId(nextAgents.items[0].id);
         void refreshAgentDetail(activeToken, nextAgents.items[0].id);
@@ -275,7 +331,8 @@ export function AdminShell() {
         method: "POST",
         body: JSON.stringify({
           force_action: forceAction ?? null,
-          target_topic: cohorts.find((cohort) => cohort.id === agents.find((agent) => agent.id === agentId)?.primary_cohort_id)?.scenario ?? null
+          target_topic:
+            cohorts.find((cohort) => cohort.id === agents.find((agent) => agent.id === agentId)?.primary_cohort_id)?.scenario ?? null
         })
       });
       await refresh(token);
@@ -285,12 +342,24 @@ export function AdminShell() {
     }
   }
 
+  async function runPipelineCycle() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/pipeline/run-cycle", token, { method: "POST" });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "pipeline run failed");
+    }
+  }
+
   return (
     <section style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 }}>
       <StatusCard
-        eyebrow="Phase 2 admin"
-        title="Invite-only control plane"
-        description="The admin surface now manages prompts, cohorts, persistent agents, and manual turn execution."
+        eyebrow="Phase 3 admin"
+        title="Control plane with pipeline visibility"
+        description="The admin surface now manages agents and also exposes model registry, trends, and inference traces."
       />
 
       {!token ? (
@@ -318,11 +387,19 @@ export function AdminShell() {
         ))}
       </div>
 
+      <StatusCard
+        eyebrow="Phase 3 pipeline"
+        title="Run projections and feature updates"
+        description="Relay the outbox, consume published events, rebuild trends, and refresh model-facing feature snapshots."
+      >
+        <button onClick={runPipelineCycle} disabled={!token}>Run pipeline cycle</button>
+      </StatusCard>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <StatusCard
           eyebrow="Invites"
           title="Invite issuance"
-          description="Phase 1 keeps onboarding invite-only and observable."
+          description="Invite-only onboarding still anchors the alpha while the pipeline layer hardens underneath it."
         >
           <div style={{ display: "grid", gap: 12 }}>
             <button onClick={createInvite} disabled={!token}>Create member invite</button>
@@ -340,7 +417,7 @@ export function AdminShell() {
         <StatusCard
           eyebrow="Moderation"
           title="Open moderation queue"
-          description="Simple Phase 1 rule signals make flagged content visible before model-assisted moderation exists."
+          description="Rule-based signals remain visible while model-driven scoring is still isolated to Phase 3 analytics paths."
         >
           <div style={{ display: "grid", gap: 12 }}>
             {moderationSignals.length ? (
@@ -381,7 +458,7 @@ export function AdminShell() {
         <StatusCard
           eyebrow="Cohorts"
           title="Agent cohorts"
-          description="Cohorts let you shape scenario and budget pressure before faction logic exists."
+          description="Cohorts still shape pressure and scenario, while Phase 3 lets you inspect their downstream event signatures."
         >
           <div style={{ display: "grid", gap: 12 }}>
             <input value={newCohortName} onChange={(event) => setNewCohortName(event.target.value)} placeholder="Cohort name" />
@@ -415,7 +492,7 @@ export function AdminShell() {
         <StatusCard
           eyebrow="Runtime"
           title="Agent roster"
-          description="Execute turns manually to validate memory updates, budget accounting, and action generation."
+          description="Execute turns manually to validate memory updates, budget accounting, and event generation."
         >
           <div style={{ display: "grid", gap: 12 }}>
             {agents.map((agent) => (
@@ -468,6 +545,76 @@ export function AdminShell() {
           </div>
         </StatusCard>
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Model registry"
+          title="Bootstrap model versions"
+          description="Phase 3 seeds feed ranking, ideology embedding, and coordination anomaly models with dataset manifests and evaluations."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {models.map((model) => (
+              <div key={model.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{model.model_name}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  {model.registry_state} · {model.feature_set_version} · quality {Number(model.metrics_json.quality ?? 0).toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Datasets"
+          title="Offline manifests"
+          description="Every bootstrap model now points at a materialized manifest with provenance policy and row counts."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {datasets.map((dataset) => (
+              <div key={dataset.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{dataset.model_name}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  {dataset.provenance_policy} · rows {dataset.row_count}
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Inference"
+          title="Recent scoring logs"
+          description="Feed ranking and anomaly scoring now leave inspectable inference traces in the control plane."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {inferenceLogs.slice(0, 5).map((log) => (
+              <div key={log.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{log.task_type}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  {log.subject_type} · {log.decision_path}
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+      </div>
+
+      <StatusCard
+        eyebrow="Trends"
+        title="Synthetic amplification snapshots"
+        description="Trend snapshots now expose volume, synthetic share, and coordination score for the latest event windows."
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          {trends.slice(0, 6).map((trend) => (
+            <div key={trend.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+              <strong>{trend.topic_key}</strong>
+              <div style={{ color: "#5f5348" }}>
+                volume {trend.volume} · synthetic {trend.synthetic_share.toFixed(2)} · coordination {trend.coordination_score.toFixed(2)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </StatusCard>
 
       {message ? <StatusCard eyebrow="Status" title="Latest response" description={message} /> : null}
     </section>

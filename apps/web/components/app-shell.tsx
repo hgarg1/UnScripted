@@ -192,9 +192,9 @@ export function AppShell() {
   return (
     <section style={{ display: "grid", gap: 16, maxWidth: 1120, margin: "0 auto" }}>
       <StatusCard
-        eyebrow="Phase 1"
-        title="Invite-only social product"
-        description="The app now logs in through invite codes, persists session tokens, and uses real FastAPI write and read paths."
+        eyebrow="Phase 3"
+        title="Invite-only social product with model hooks"
+        description="The app still feels minimal on the surface, but feed reads now log ranking inference and the backend can project events into features and trends."
       />
 
       {!token ? (
@@ -267,7 +267,7 @@ export function AppShell() {
       <StatusCard
         eyebrow="Home feed"
         title="Ranked public discourse"
-        description="This is still deterministic in Phase 1, but the data path is ready for projection-backed and model-backed ranking."
+        description="Ranking still uses a bootstrap heuristic, but Phase 3 now persists inference logs and projection-driven features behind the feed path."
       >
         <div style={{ display: "grid", gap: 12 }}>
           {feed?.items?.map((item) => (

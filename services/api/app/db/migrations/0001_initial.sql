@@ -223,3 +223,126 @@ CREATE TABLE IF NOT EXISTS agent_turn_logs (
   output_ref_id varchar(36),
   created_at timestamptz NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS feature_snapshots (
+  id varchar(36) PRIMARY KEY,
+  entity_type varchar(32) NOT NULL,
+  entity_id varchar(36) NOT NULL,
+  feature_set varchar(64) NOT NULL,
+  feature_version varchar(32) NOT NULL,
+  observed_at timestamptz NOT NULL,
+  features_json jsonb NOT NULL,
+  source_window varchar(64) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consumer_checkpoints (
+  consumer_name varchar(64) PRIMARY KEY,
+  last_event_id varchar(36),
+  last_outbox_id varchar(36),
+  last_event_at timestamptz,
+  processed_count integer NOT NULL,
+  metadata_json jsonb NOT NULL,
+  updated_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS dataset_manifests (
+  id varchar(36) PRIMARY KEY,
+  model_name varchar(120) NOT NULL,
+  dataset_ref varchar(255) NOT NULL UNIQUE,
+  provenance_policy varchar(64) NOT NULL,
+  feature_set_version varchar(32) NOT NULL,
+  row_count integer NOT NULL,
+  status varchar(32) NOT NULL,
+  manifest_json jsonb NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS model_versions (
+  id varchar(36) PRIMARY KEY,
+  model_name varchar(120) NOT NULL,
+  task_type varchar(64) NOT NULL,
+  registry_state varchar(32) NOT NULL,
+  artifact_uri varchar(512) NOT NULL,
+  feature_set_version varchar(32) NOT NULL,
+  training_dataset_ref varchar(255) NOT NULL,
+  metrics_json jsonb NOT NULL,
+  created_at timestamptz NOT NULL,
+  promoted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS model_evaluations (
+  id varchar(36) PRIMARY KEY,
+  model_version_id varchar(36) NOT NULL REFERENCES model_versions(id) ON DELETE CASCADE,
+  dataset_ref varchar(255) NOT NULL,
+  eval_type varchar(64) NOT NULL,
+  metrics_json jsonb NOT NULL,
+  decision varchar(32) NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS inference_logs (
+  id varchar(36) PRIMARY KEY,
+  model_version_id varchar(36) REFERENCES model_versions(id) ON DELETE SET NULL,
+  task_type varchar(64) NOT NULL,
+  subject_type varchar(32) NOT NULL,
+  subject_id varchar(36) NOT NULL,
+  request_features_ref varchar(255) NOT NULL,
+  prediction_json jsonb NOT NULL,
+  latency_ms integer NOT NULL,
+  decision_path varchar(255) NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trend_snapshots (
+  id varchar(36) PRIMARY KEY,
+  window_start timestamptz NOT NULL,
+  window_end timestamptz NOT NULL,
+  topic_key varchar(120) NOT NULL,
+  volume integer NOT NULL,
+  velocity double precision NOT NULL,
+  synthetic_share double precision NOT NULL,
+  coordination_score double precision NOT NULL,
+  promoted boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS moderation_signals (
+  id varchar(36) PRIMARY KEY,
+  content_type varchar(32) NOT NULL,
+  content_id varchar(36) NOT NULL,
+  signal_type varchar(64) NOT NULL,
+  score double precision NOT NULL,
+  source varchar(64) NOT NULL,
+  status varchar(32) NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_feature_snapshots_entity_feature_observed_at
+  ON feature_snapshots(entity_type, entity_id, feature_set, observed_at);
+
+CREATE INDEX IF NOT EXISTS ix_dataset_manifests_model_created_at
+  ON dataset_manifests(model_name, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_model_versions_name_registry_state
+  ON model_versions(model_name, registry_state);
+
+CREATE INDEX IF NOT EXISTS ix_model_evaluations_model_version_created_at
+  ON model_evaluations(model_version_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_inference_logs_model_version_created_at
+  ON inference_logs(model_version_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_inference_logs_subject_created_at
+  ON inference_logs(subject_type, subject_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_trend_snapshots_window_promoted
+  ON trend_snapshots(window_end, promoted);
+
+CREATE INDEX IF NOT EXISTS ix_trend_snapshots_topic_window
+  ON trend_snapshots(topic_key, window_end);
+
+CREATE INDEX IF NOT EXISTS ix_moderation_signals_content
+  ON moderation_signals(content_type, content_id);
+
+CREATE INDEX IF NOT EXISTS ix_moderation_signals_status_created_at
+  ON moderation_signals(status, created_at);

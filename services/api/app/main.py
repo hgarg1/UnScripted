@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from services.api.app.api.routes.agents import router as agents_router
 from services.api.app.api.routes.auth import router as auth_router
 from services.api.app.api.routes.health import router as health_router
+from services.api.app.api.routes.ml import router as ml_router
 from services.api.app.api.routes.social import router as social_router
 from services.api.app.core.config import get_settings
 from services.api.app.db.base import Base
@@ -25,4 +26,5 @@ app = FastAPI(title=settings.api_title, lifespan=lifespan)
 app.include_router(agents_router)
 app.include_router(auth_router)
 app.include_router(health_router)
+app.include_router(ml_router)
 app.include_router(social_router)

@@ -5,6 +5,7 @@ from services.api.app.db.base import Base
 from services.api.app.db.session import SessionLocal, engine
 from services.api.app.models.agent import Agent, AgentCohort, AgentMemory, AgentPromptVersion
 from services.api.app.models.social import Post, Profile, User
+from ml.common.bootstrap_pipeline import ensure_bootstrap_models
 
 
 def seed() -> None:
@@ -109,6 +110,7 @@ def seed() -> None:
                     )
                 )
 
+        ensure_bootstrap_models(session)
         session.commit()
 
 

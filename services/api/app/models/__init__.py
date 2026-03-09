@@ -11,7 +11,16 @@ from services.api.app.models.agent import (
 from services.api.app.models.auth import IdempotencyKeyRecord, InviteCode, SessionToken
 from services.api.app.models.enums import AccountRole, AccountStatus, EventType, OutboxStatus, ProvenanceType
 from services.api.app.models.eventing import Event, OutboxMessage
-from services.api.app.models.ml import FeatureSnapshot, InferenceLog, ModelEvaluation, ModelVersion, ModerationSignal, TrendSnapshot
+from services.api.app.models.ml import (
+    ConsumerCheckpoint,
+    DatasetManifest,
+    FeatureSnapshot,
+    InferenceLog,
+    ModelEvaluation,
+    ModelVersion,
+    ModerationSignal,
+    TrendSnapshot,
+)
 from services.api.app.models.social import Comment, DM, Follow, Like, Post, Profile, Repost, User
 
 __all__ = [
@@ -24,6 +33,8 @@ __all__ = [
     "AgentPromptVersion",
     "AgentTurnLog",
     "Comment",
+    "ConsumerCheckpoint",
+    "DatasetManifest",
     "DM",
     "Event",
     "EventType",

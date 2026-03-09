@@ -8,6 +8,7 @@ from services.api.app.api.routes.health import router as health_router
 from services.api.app.api.routes.ml import router as ml_router
 from services.api.app.api.routes.observability import router as observability_router
 from services.api.app.api.routes.social import router as social_router
+from services.api.app.api.routes.simulation import router as simulation_router
 from services.api.app.core.config import get_settings
 from services.api.app.db.base import Base
 from services.api.app.db.session import engine
@@ -30,3 +31,4 @@ app.include_router(health_router)
 app.include_router(ml_router)
 app.include_router(observability_router)
 app.include_router(social_router)
+app.include_router(simulation_router)

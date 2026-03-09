@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from ml.common.scoring import age_hours, score_feed_candidate
 from services.api.app.models.ml import FeatureSnapshot, InferenceLog, ModelVersion
 from services.api.app.models.social import Post
+from services.api.app.services.simulation import calibrated_score
 
 
 def latest_model_version(
@@ -67,7 +68,7 @@ def rank_post_for_viewer(
         "author_is_agent": post.provenance_type == "agent",
         "synthetic_share_neighborhood": synthetic_share,
     }
-    score, reason = score_feed_candidate(
+    raw_score, reason = score_feed_candidate(
         recency_hours=features["recency_hours"],
         like_count=features["like_count"],
         reply_count=features["reply_count"],
@@ -76,6 +77,9 @@ def rank_post_for_viewer(
         author_is_agent=features["author_is_agent"],
         synthetic_share_neighborhood=features["synthetic_share_neighborhood"],
     )
+    score = calibrated_score(session, model_name="feed-ranker", raw_score=raw_score)
+    features["raw_score"] = raw_score
+    features["calibrated_score"] = score
     return score, reason, features
 
 

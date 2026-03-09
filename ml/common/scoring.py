@@ -38,10 +38,42 @@ def score_coordination_anomaly(
     unique_authors_1h: int,
     synthetic_share_1h: float,
     repost_ratio_1h: float = 0.0,
+    cohort_concentration_1h: float = 0.0,
 ) -> tuple[float, bool]:
     density = event_volume_1h / max(unique_authors_1h, 1)
-    score = min(1.0, density * 0.05 + synthetic_share_1h * 0.55 + repost_ratio_1h * 0.25)
+    score = min(
+        1.0,
+        density * 0.05
+        + synthetic_share_1h * 0.45
+        + repost_ratio_1h * 0.2
+        + cohort_concentration_1h * 0.3,
+    )
     return score, score >= 0.65
+
+
+def predict_escalation_risk(
+    *,
+    pending_mentions: int,
+    recent_engagement: int,
+    scenario_pressure: float,
+    synthetic_share_1h: float,
+    hostility_bias: float,
+    moderation_pressure: float = 0.0,
+) -> tuple[float, bool]:
+    score = min(
+        1.0,
+        (pending_mentions * 0.08)
+        + min(0.25, recent_engagement * 0.02)
+        + scenario_pressure * 0.3
+        + synthetic_share_1h * 0.2
+        + hostility_bias * 0.2
+        + moderation_pressure * 0.15,
+    )
+    return score, score >= 0.7
+
+
+def calibrate_prediction(raw_score: float, *, offset: float = 0.0, scale: float = 1.0) -> float:
+    return max(0.0, raw_score * scale + offset)
 
 
 def embed_ideology(text: str) -> tuple[list[float], str]:

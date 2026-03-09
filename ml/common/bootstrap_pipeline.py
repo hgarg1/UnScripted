@@ -28,6 +28,11 @@ MODEL_CATALOG: dict[str, dict[str, str]] = {
         "feature_set_version": "coordination_v1",
         "default_state": "shadow",
     },
+    "conversation-escalation": {
+        "task_type": "conversation-escalation",
+        "feature_set_version": "escalation_v1",
+        "default_state": "validated",
+    },
 }
 
 ARTIFACT_ROOT = Path("artifacts")
@@ -130,6 +135,7 @@ def _bootstrap_metrics(model_name: str, row_count: int) -> dict[str, float | int
         "feed-ranker": 0.71,
         "ideology-embedding": 0.68,
         "coordination-anomaly": 0.74,
+        "conversation-escalation": 0.67,
     }[model_name]
     return {
         "quality": baseline,

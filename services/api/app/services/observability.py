@@ -11,6 +11,7 @@ from services.api.app.models.eventing import Event, OutboxMessage
 from services.api.app.models.game import GuessGameGuess
 from services.api.app.models.ml import ConsumerCheckpoint, InferenceLog, ModelVersion, ModerationSignal, TrendSnapshot
 from services.api.app.models.social import Post, Profile, User
+from services.api.app.models.simulation import CalibrationSnapshot, ExperimentRun, ScenarioInjection
 
 
 def rebuild_factions(session: Session) -> list[dict]:
@@ -97,12 +98,22 @@ def build_observability_overview(session: Session) -> dict:
     active_models = session.scalar(
         select(func.count()).select_from(ModelVersion).where(ModelVersion.registry_state == "active")
     ) or 0
+    active_experiments = session.scalar(
+        select(func.count()).select_from(ExperimentRun).where(ExperimentRun.state == "active")
+    ) or 0
+    pending_injections = session.scalar(
+        select(func.count()).select_from(ScenarioInjection).where(ScenarioInjection.state == "pending")
+    ) or 0
+    calibration_runs = session.scalar(select(func.count()).select_from(CalibrationSnapshot)) or 0
     metrics = [
         {"key": "pending_outbox", "value": float(pending_outbox), "label": "Pending outbox rows"},
         {"key": "event_volume", "value": float(total_events), "label": "Total canonical events"},
         {"key": "inference_logs", "value": float(total_logs), "label": "Inference log rows"},
         {"key": "open_moderation", "value": float(open_signals), "label": "Open moderation signals"},
         {"key": "active_models", "value": float(active_models), "label": "Active models"},
+        {"key": "active_experiments", "value": float(active_experiments), "label": "Active experiments"},
+        {"key": "pending_injections", "value": float(pending_injections), "label": "Pending scenario injections"},
+        {"key": "calibration_runs", "value": float(calibration_runs), "label": "Calibration snapshots"},
         {
             "key": "latest_synthetic_share",
             "value": float(latest_trend.synthetic_share if latest_trend else 0.0),

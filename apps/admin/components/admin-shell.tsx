@@ -121,6 +121,30 @@ type FactionDetail = {
   scenario_mix: string[];
 };
 
+type ExperimentRun = {
+  id: string;
+  name: string;
+  scenario_key: string;
+  state: string;
+  target_cohort_id: string | null;
+};
+
+type ScenarioInjection = {
+  id: string;
+  experiment_id: string | null;
+  target_cohort_id: string | null;
+  injection_type: string;
+  state: string;
+  payload_json: Record<string, unknown>;
+};
+
+type CalibrationSnapshot = {
+  id: string;
+  model_name: string;
+  calibration_json: Record<string, number | string>;
+  drift_summary_json: Record<string, number | string>;
+};
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -163,6 +187,9 @@ export function AdminShell() {
   const [provenance, setProvenance] = useState<ProvenanceSlice[]>([]);
   const [rollouts, setRollouts] = useState<RolloutState[]>([]);
   const [factions, setFactions] = useState<FactionDetail[]>([]);
+  const [experiments, setExperiments] = useState<ExperimentRun[]>([]);
+  const [injections, setInjections] = useState<ScenarioInjection[]>([]);
+  const [calibrations, setCalibrations] = useState<CalibrationSnapshot[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentMemories, setAgentMemories] = useState<AgentMemory[]>([]);
   const [agentTurns, setAgentTurns] = useState<AgentTurnLog[]>([]);
@@ -174,6 +201,11 @@ export function AdminShell() {
   const [newPromptBody, setNewPromptBody] = useState("Behave like a persistent account in a synthetic discourse experiment.");
   const [newCohortName, setNewCohortName] = useState("pressure-testers");
   const [newCohortScenario, setNewCohortScenario] = useState("amplification-spike");
+  const [newExperimentName, setNewExperimentName] = useState("Escalation Pressure Test");
+  const [newExperimentScenario, setNewExperimentScenario] = useState("escalation-pressure");
+  const [newInjectionType, setNewInjectionType] = useState("cadence-spike");
+  const [newInjectionPayload, setNewInjectionPayload] = useState('{ "multiplier": 1.8 }');
+  const [calibrationModelName, setCalibrationModelName] = useState("conversation-escalation");
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -196,7 +228,10 @@ export function AdminShell() {
         nextRegistry,
         nextTrends,
         nextLogs,
-        nextObservability
+        nextObservability,
+        nextExperiments,
+        nextInjections,
+        nextCalibrations
       ] = await Promise.all([
         apiFetch<{
           total_users: number;
@@ -218,7 +253,10 @@ export function AdminShell() {
           provenance: ProvenanceSlice[];
           rollouts: RolloutState[];
           factions: FactionDetail[];
-        }>("/v1/admin/observability/overview", activeToken)
+        }>("/v1/admin/observability/overview", activeToken),
+        apiFetch<ExperimentRun[]>("/v1/admin/experiments", activeToken),
+        apiFetch<ScenarioInjection[]>("/v1/admin/scenario-injections", activeToken),
+        apiFetch<CalibrationSnapshot[]>("/v1/admin/calibrations", activeToken)
       ]);
       setOverview(nextOverview);
       setInvites(nextInvites);
@@ -234,6 +272,9 @@ export function AdminShell() {
       setProvenance(nextObservability.provenance);
       setRollouts(nextObservability.rollouts);
       setFactions(nextObservability.factions);
+      setExperiments(nextExperiments);
+      setInjections(nextInjections);
+      setCalibrations(nextCalibrations);
       if (!selectedAgentId && nextAgents.items.length) {
         setSelectedAgentId(nextAgents.items[0].id);
         void refreshAgentDetail(activeToken, nextAgents.items[0].id);
@@ -412,6 +453,77 @@ export function AdminShell() {
     }
   }
 
+  async function createExperiment() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/experiments", token, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newExperimentName,
+          scenario_key: newExperimentScenario,
+          target_cohort_id: cohorts[0]?.id ?? null,
+          configuration_json: { target_model: calibrationModelName },
+          start_immediately: true
+        })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "experiment creation failed");
+    }
+  }
+
+  async function createInjection() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/scenario-injections", token, {
+        method: "POST",
+        body: JSON.stringify({
+          experiment_id: experiments[0]?.id ?? null,
+          target_cohort_id: cohorts[0]?.id ?? null,
+          injection_type: newInjectionType,
+          payload_json: JSON.parse(newInjectionPayload),
+          apply_now: true
+        })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "scenario injection failed");
+    }
+  }
+
+  async function runCalibration() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/calibrations/run", token, {
+        method: "POST",
+        body: JSON.stringify({ model_name: calibrationModelName })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "calibration failed");
+    }
+  }
+
+  async function buildAdvancedReport() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch(`/v1/admin/evaluations/${calibrationModelName}/advanced-report`, token, {
+        method: "POST"
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "advanced evaluation failed");
+    }
+  }
+
   return (
     <section style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 }}>
       <StatusCard
@@ -562,6 +674,66 @@ export function AdminShell() {
             <input value={newAgentArchetype} onChange={(event) => setNewAgentArchetype(event.target.value)} placeholder="Archetype" />
             <textarea value={newAgentBio} onChange={(event) => setNewAgentBio(event.target.value)} rows={4} />
             <button onClick={createAgent} disabled={!token}>Create agent</button>
+          </div>
+        </StatusCard>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Experiments"
+          title="Run intervention cohorts"
+          description="Phase 5 adds explicit experiment objects so injections, calibrations, and reports can be attributed to a scenario."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={newExperimentName} onChange={(event) => setNewExperimentName(event.target.value)} placeholder="Experiment name" />
+            <input value={newExperimentScenario} onChange={(event) => setNewExperimentScenario(event.target.value)} placeholder="Scenario key" />
+            <button onClick={createExperiment} disabled={!token}>Create experiment</button>
+            {experiments.slice(0, 4).map((experiment) => (
+              <div key={experiment.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{experiment.name}</strong>
+                <div style={{ color: "#5f5348" }}>{experiment.scenario_key} · {experiment.state}</div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Scenario injection"
+          title="Perturb agent cohorts"
+          description="Inject belief shifts, cadence spikes, budget boosts, or scenario overrides into a target cohort."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={newInjectionType} onChange={(event) => setNewInjectionType(event.target.value)} placeholder="Injection type" />
+            <textarea value={newInjectionPayload} onChange={(event) => setNewInjectionPayload(event.target.value)} rows={4} />
+            <button onClick={createInjection} disabled={!token}>Create and apply injection</button>
+            {injections.slice(0, 4).map((injection) => (
+              <div key={injection.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{injection.injection_type}</strong>
+                <div style={{ color: "#5f5348" }}>{injection.state}</div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Calibration"
+          title="Micro-batch model tuning"
+          description="Run short-window calibration and advanced evaluation reports from live inference logs."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={calibrationModelName} onChange={(event) => setCalibrationModelName(event.target.value)} placeholder="Model name" />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={runCalibration} disabled={!token}>Run calibration</button>
+              <button onClick={buildAdvancedReport} disabled={!token}>Build report</button>
+            </div>
+            {calibrations.slice(0, 4).map((snapshot) => (
+              <div key={snapshot.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{snapshot.model_name}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  offset {Number(snapshot.calibration_json.offset ?? 0).toFixed(2)} · scale {Number(snapshot.calibration_json.scale ?? 1).toFixed(2)}
+                </div>
+              </div>
+            ))}
           </div>
         </StatusCard>
       </div>

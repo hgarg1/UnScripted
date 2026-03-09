@@ -23,6 +23,7 @@ from services.api.app.models.ml import (
     TrendSnapshot,
 )
 from services.api.app.models.social import Comment, DM, Follow, Like, Post, Profile, Repost, User
+from services.api.app.models.simulation import CalibrationSnapshot, ExperimentRun, ScenarioInjection
 
 __all__ = [
     "AccountRole",
@@ -34,6 +35,7 @@ __all__ = [
     "AgentPromptVersion",
     "AgentTurnLog",
     "Comment",
+    "CalibrationSnapshot",
     "ConsumerCheckpoint",
     "DatasetManifest",
     "DM",
@@ -42,6 +44,7 @@ __all__ = [
     "Faction",
     "FeatureSnapshot",
     "Follow",
+    "ExperimentRun",
     "GuessGameGuess",
     "IdempotencyKeyRecord",
     "InferenceLog",
@@ -57,6 +60,7 @@ __all__ = [
     "ProvenanceType",
     "Relationship",
     "Repost",
+    "ScenarioInjection",
     "SessionToken",
     "TrendSnapshot",
     "User",

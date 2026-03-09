@@ -362,3 +362,52 @@ CREATE INDEX IF NOT EXISTS ix_guess_game_guesses_user_created_at
 
 CREATE INDEX IF NOT EXISTS ix_guess_game_guesses_target_created_at
   ON guess_game_guesses(target_account_id, created_at);
+
+CREATE TABLE IF NOT EXISTS experiment_runs (
+  id varchar(36) PRIMARY KEY,
+  name varchar(120) NOT NULL,
+  scenario_key varchar(120) NOT NULL,
+  state varchar(32) NOT NULL,
+  target_cohort_id varchar(36) REFERENCES agent_cohorts(id) ON DELETE SET NULL,
+  configuration_json jsonb NOT NULL,
+  metrics_json jsonb NOT NULL,
+  started_at timestamptz,
+  ended_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scenario_injections (
+  id varchar(36) PRIMARY KEY,
+  experiment_id varchar(36) REFERENCES experiment_runs(id) ON DELETE SET NULL,
+  target_cohort_id varchar(36) REFERENCES agent_cohorts(id) ON DELETE SET NULL,
+  injection_type varchar(64) NOT NULL,
+  state varchar(32) NOT NULL,
+  payload_json jsonb NOT NULL,
+  applied_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calibration_snapshots (
+  id varchar(36) PRIMARY KEY,
+  model_name varchar(120) NOT NULL,
+  window_start timestamptz NOT NULL,
+  window_end timestamptz NOT NULL,
+  calibration_json jsonb NOT NULL,
+  drift_summary_json jsonb NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_experiment_runs_state_created_at
+  ON experiment_runs(state, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_experiment_runs_target_cohort
+  ON experiment_runs(target_cohort_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_scenario_injections_state_created_at
+  ON scenario_injections(state, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_scenario_injections_target_cohort
+  ON scenario_injections(target_cohort_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_calibration_snapshots_model_created_at
+  ON calibration_snapshots(model_name, created_at);

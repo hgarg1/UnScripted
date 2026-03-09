@@ -10,12 +10,14 @@ from sqlalchemy.orm import Session
 
 from ml.common.scoring import cluster_topic_labels, score_coordination_anomaly
 from services.api.app.core.config import get_settings
+from services.api.app.models.agent import Agent
 from services.api.app.models.eventing import Event, OutboxMessage
 from services.api.app.models.ml import ConsumerCheckpoint, FeatureSnapshot, TrendSnapshot
 from services.api.app.models.enums import OutboxStatus
 from services.api.app.models.social import Post
 from services.api.app.services.ml import latest_model_version, log_inference
 from services.api.app.services.observability import rebuild_factions
+from services.api.app.services.simulation import calibrated_score
 
 
 settings = get_settings()
@@ -84,11 +86,15 @@ def consume_published_events(
 
     actor_ids: set[str] = set()
     event_types: Counter[str] = Counter()
+    cohort_counter: Counter[str] = Counter()
     for row in rows:
         payload = row.payload_json
         actor_id = payload.get("actor_id")
         if actor_id:
             actor_ids.add(actor_id)
+            cohort_id = session.scalar(select(Agent.primary_cohort_id).where(Agent.account_user_id == actor_id))
+            if cohort_id:
+                cohort_counter[cohort_id] += 1
         event_types[payload.get("event_type", "unknown")] += 1
         checkpoint.last_event_id = row.event_id
         checkpoint.last_outbox_id = row.id
@@ -98,7 +104,7 @@ def consume_published_events(
     for actor_id in actor_ids:
         _record_actor_feature_snapshot(session, actor_id)
     _record_global_feature_snapshot(session)
-    trend_count = rebuild_trend_snapshots(session, event_types=event_types)
+    trend_count = rebuild_trend_snapshots(session, event_types=event_types, cohort_counter=cohort_counter)
     factions = rebuild_factions(session)
     checkpoint.metadata_json = {
         "trend_count": trend_count,
@@ -109,7 +115,12 @@ def consume_published_events(
     return len(rows)
 
 
-def rebuild_trend_snapshots(session: Session, *, event_types: Counter[str] | None = None) -> int:
+def rebuild_trend_snapshots(
+    session: Session,
+    *,
+    event_types: Counter[str] | None = None,
+    cohort_counter: Counter[str] | None = None,
+) -> int:
     now = datetime.now(UTC)
     window_start = now - timedelta(hours=1)
     recent_events = list(session.scalars(select(Event).where(Event.occurred_at >= window_start)))
@@ -123,7 +134,7 @@ def rebuild_trend_snapshots(session: Session, *, event_types: Counter[str] | Non
             volume=len(recent_events),
             velocity=float(len(recent_events)),
             synthetic_share=(synthetic_count / len(recent_events)) if recent_events else 0.0,
-            coordination_score=_coordination_score(len(recent_events), recent_events),
+            coordination_score=_coordination_score(len(recent_events), recent_events, cohort_counter),
             promoted=len(recent_events) >= 10,
         )
     ]
@@ -231,7 +242,7 @@ def _record_global_feature_snapshot(session: Session) -> FeatureSnapshot:
     return snapshot
 
 
-def _coordination_score(event_volume: int, recent_events: list[Event]) -> float:
+def _coordination_score(event_volume: int, recent_events: list[Event], cohort_counter: Counter[str] | None = None) -> float:
     unique_authors = len({event.actor_id for event in recent_events})
     synthetic_share = (
         sum(1 for event in recent_events if event.provenance_type == "agent") / len(recent_events)
@@ -239,11 +250,17 @@ def _coordination_score(event_volume: int, recent_events: list[Event]) -> float:
         else 0.0
     )
     repost_ratio = sum(1 for event in recent_events if event.event_type == "repost_created") / len(recent_events) if recent_events else 0.0
+    cohort_concentration = (
+        (cohort_counter.most_common(1)[0][1] / len(recent_events))
+        if cohort_counter and recent_events
+        else 0.0
+    )
     score, _ = score_coordination_anomaly(
         event_volume_1h=event_volume,
         unique_authors_1h=unique_authors,
         synthetic_share_1h=synthetic_share,
         repost_ratio_1h=repost_ratio,
+        cohort_concentration_1h=cohort_concentration,
     )
     return score
 
@@ -256,12 +273,27 @@ def _log_coordination_inference(session: Session, *, trend_snapshot: TrendSnapsh
         else 0.0
     )
     repost_ratio = sum(1 for event in recent_events if event.event_type == "repost_created") / len(recent_events) if recent_events else 0.0
+    actor_ids = [event.actor_id for event in recent_events]
+    cohort_counter: Counter[str] = Counter(
+        cohort_id
+        for cohort_id in session.scalars(
+            select(Agent.primary_cohort_id).where(Agent.account_user_id.in_(actor_ids))
+        )
+        if cohort_id
+    )
+    cohort_concentration = (
+        (cohort_counter.most_common(1)[0][1] / len(recent_events))
+        if cohort_counter and recent_events
+        else 0.0
+    )
     score, flagged = score_coordination_anomaly(
         event_volume_1h=len(recent_events),
         unique_authors_1h=unique_authors,
         synthetic_share_1h=synthetic_share,
         repost_ratio_1h=repost_ratio,
+        cohort_concentration_1h=cohort_concentration,
     )
+    score = calibrated_score(session, model_name="coordination-anomaly", raw_score=score)
     model = latest_model_version(
         session,
         model_name="coordination-anomaly",
@@ -281,6 +313,7 @@ def _log_coordination_inference(session: Session, *, trend_snapshot: TrendSnapsh
             "unique_authors_1h": unique_authors,
             "synthetic_share_1h": synthetic_share,
             "repost_ratio_1h": repost_ratio,
+            "cohort_concentration_1h": cohort_concentration,
         },
         decision_path=f"pipeline:{model.model_name if model else 'heuristic'}",
         latency_ms=0,

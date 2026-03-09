@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ml.common.agent_planner import AgentTurnContext, AgentTurnPlan, estimate_token_cost, generate_text, plan_turn
+from ml.common.scoring import predict_escalation_risk
 from services.api.app.models.agent import (
     Agent,
     AgentCohort,
@@ -19,7 +20,9 @@ from services.api.app.models.enums import EventType
 from services.api.app.models.ml import ModerationSignal
 from services.api.app.models.social import Comment, DM, Follow, Like, Post, Profile, User
 from services.api.app.services.events import append_event
+from services.api.app.services.ml import latest_feature_snapshot, latest_model_version, log_inference
 from services.api.app.services.moderation import maybe_create_signal
+from services.api.app.services.simulation import active_scenario_pressure, calibrated_score
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,6 +214,77 @@ def execute_agent_turn(
     if target_topic:
         context = replace(context, target_topic=target_topic)
     plan = plan_turn(context)
+
+    scenario_pressure, injection_type = active_scenario_pressure(session, agent=agent)
+    global_features = latest_feature_snapshot(
+        session,
+        entity_type="global",
+        entity_id="platform",
+        feature_set="event-window",
+    )
+    synthetic_share = float(global_features.features_json.get("synthetic_share_1h", 0.0)) if global_features else 0.0
+    moderation_pressure = float(
+        session.scalar(
+            select(func.count()).select_from(ModerationSignal).where(
+                ModerationSignal.source == "rule-engine",
+                ModerationSignal.status == "open",
+            )
+        )
+        or 0
+    )
+    hostility_bias = {
+        "contrarian": 0.7,
+        "zealot": 0.9,
+        "booster": 0.25,
+        "bridge-builder": 0.15,
+    }.get(agent.archetype, 0.4)
+    escalation_score, should_escalate = predict_escalation_risk(
+        pending_mentions=context.pending_mentions,
+        recent_engagement=context.recent_engagement,
+        scenario_pressure=scenario_pressure,
+        synthetic_share_1h=synthetic_share,
+        hostility_bias=hostility_bias,
+        moderation_pressure=min(1.0, moderation_pressure / 10.0),
+    )
+    escalation_score = calibrated_score(session, model_name="conversation-escalation", raw_score=escalation_score)
+    escalation_model = latest_model_version(
+        session,
+        model_name="conversation-escalation",
+        registry_states=("active", "shadow", "validated"),
+    )
+    log_inference(
+        session,
+        model_version=escalation_model,
+        task_type="conversation-escalation",
+        subject_type="agent",
+        subject_id=agent.id,
+        request_features_ref=f"agent-turn:{agent.id}:{datetime.now(UTC).isoformat()}",
+        prediction_json={
+            "score": escalation_score,
+            "flagged": should_escalate,
+            "scenario_pressure": scenario_pressure,
+            "synthetic_share_1h": synthetic_share,
+            "hostility_bias": hostility_bias,
+            "injection_type": injection_type,
+        },
+        decision_path=f"agent-policy:{escalation_model.model_name if escalation_model else 'heuristic'}",
+        latency_ms=0,
+    )
+    if not force_action and should_escalate and plan.action == "reply":
+        plan = AgentTurnPlan(
+            action="escalate",
+            confidence=max(plan.confidence, escalation_score),
+            should_generate_text=True,
+            reason=f"scenario pressure elevated escalation risk via {injection_type or 'baseline'}",
+        )
+    elif not force_action and not should_escalate and plan.action == "escalate":
+        plan = AgentTurnPlan(
+            action="reply",
+            confidence=min(plan.confidence, max(0.35, 1.0 - escalation_score)),
+            should_generate_text=True,
+            reason="escalation model downgraded the intervention",
+        )
+
     if force_action:
         plan = AgentTurnPlan(
             action=force_action,
@@ -416,14 +490,21 @@ def execute_agent_turn(
         "last_reset_date": agent.budget_state.get("last_reset_date", datetime.now(UTC).date().isoformat()),
     }
     agent.last_active_at = datetime.now(UTC)
-    agent.influence_score = round(agent.influence_score + 0.01, 4)
+    influence_boost = 0.02 if plan.action in {"post", "escalate"} else 0.01
+    agent.influence_score = round(agent.influence_score + influence_boost + (scenario_pressure * 0.02), 4)
     _ensure_memory(
         session,
         agent.id,
         "episodic",
         f"{user.handle} chose {plan.action}: {plan.reason}",
         0.4,
-        metadata={"output_ref_type": output_ref_type, "output_ref_id": output_ref_id},
+        metadata={
+            "output_ref_type": output_ref_type,
+            "output_ref_id": output_ref_id,
+            "escalation_score": escalation_score,
+            "scenario_pressure": scenario_pressure,
+            "injection_type": injection_type,
+        },
     )
 
     return ExecutedAgentTurn(

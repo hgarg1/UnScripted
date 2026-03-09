@@ -30,6 +30,23 @@ export function AppShell() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [feed, setFeed] = useState<FeedResponse | null>(null);
   const [discovery, setDiscovery] = useState<DiscoveryResponse | null>(null);
+  const [trends, setTrends] = useState<Array<{
+    id: string;
+    topic_key: string;
+    volume: number;
+    synthetic_share: number;
+    coordination_score: number;
+  }>>([]);
+  const [guessables, setGuessables] = useState<Array<{
+    account_id: string;
+    handle: string;
+    display_name: string;
+    bio: string;
+    latest_post_excerpt: string | null;
+    recent_activity_count: number;
+    already_guessed: boolean;
+  }>>([]);
+  const [guessScore, setGuessScore] = useState<{ attempts: number; correct: number; accuracy: number } | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [inviteCode, setInviteCode] = useState("UNSCRIPTED-ALPHA");
@@ -51,14 +68,28 @@ export function AppShell() {
   async function refreshAll(activeToken: string) {
     try {
       setLoading(true);
-      const [sessionProfile, nextFeed, nextDiscovery] = await Promise.all([
+      const [sessionProfile, nextFeed, nextDiscovery, nextTrends, nextGuessables, nextGuessScore] = await Promise.all([
         apiFetch<Profile>("/v1/me", activeToken),
         apiFetch<FeedResponse>("/v1/feed", activeToken),
-        apiFetch<DiscoveryResponse>("/v1/discovery/accounts", activeToken)
+        apiFetch<DiscoveryResponse>("/v1/discovery/accounts", activeToken),
+        apiFetch<Array<{ id: string; topic_key: string; volume: number; synthetic_share: number; coordination_score: number }>>("/v1/trends", activeToken),
+        apiFetch<{ items: Array<{
+          account_id: string;
+          handle: string;
+          display_name: string;
+          bio: string;
+          latest_post_excerpt: string | null;
+          recent_activity_count: number;
+          already_guessed: boolean;
+        }> }>("/v1/game/guessable-accounts", activeToken),
+        apiFetch<{ attempts: number; correct: number; accuracy: number }>("/v1/game/score", activeToken)
       ]);
       setProfile(sessionProfile);
       setFeed(nextFeed);
       setDiscovery(nextDiscovery);
+      setTrends(nextTrends);
+      setGuessables(nextGuessables.items);
+      setGuessScore(nextGuessScore);
       setBio(sessionProfile.bio);
       setDisplayName(sessionProfile.display_name);
       setMessage("");
@@ -187,14 +218,33 @@ export function AppShell() {
     setProfile(null);
     setFeed(null);
     setDiscovery(null);
+    setTrends([]);
+    setGuessables([]);
+    setGuessScore(null);
+  }
+
+  async function handleGuess(accountId: string, guessedIsAgent: boolean) {
+    if (!token) {
+      return;
+    }
+    try {
+      const result = await apiFetch<{ was_correct: boolean; actual_account_type: string }>("/v1/game/guesses", token, {
+        method: "POST",
+        body: JSON.stringify({ target_account_id: accountId, guessed_is_agent: guessedIsAgent })
+      });
+      setMessage(result.was_correct ? "guess correct" : `guess wrong: actual type is ${result.actual_account_type}`);
+      await refreshAll(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "guess failed");
+    }
   }
 
   return (
     <section style={{ display: "grid", gap: 16, maxWidth: 1120, margin: "0 auto" }}>
       <StatusCard
-        eyebrow="Phase 3"
-        title="Invite-only social product with model hooks"
-        description="The app still feels minimal on the surface, but feed reads now log ranking inference and the backend can project events into features and trends."
+        eyebrow="Phase 4"
+        title="Invite-only social product with live simulation surfaces"
+        description="The product now exposes promoted trends and a human-vs-agent guessing game so the synthetic layer is visible to users, not just operators."
       />
 
       {!token ? (
@@ -260,6 +310,28 @@ export function AppShell() {
                 ))}
               </div>
             </StatusCard>
+
+            <StatusCard
+              eyebrow="Guessing game"
+              title={`Human or agent? ${guessScore ? `${guessScore.correct}/${guessScore.attempts}` : "0/0"}`}
+              description="Phase 4 adds a lightweight guessing game so users can test whether synthetic behavior is actually convincing."
+            >
+              <div style={{ display: "grid", gap: 12 }}>
+                {guessables.slice(0, 3).map((account) => (
+                  <div key={account.account_id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                    <strong>@{account.handle}</strong>
+                    <p style={{ margin: "6px 0" }}>{account.bio}</p>
+                    {account.latest_post_excerpt ? (
+                      <div style={{ color: "var(--muted)", marginBottom: 8 }}>{account.latest_post_excerpt}</div>
+                    ) : null}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={() => void handleGuess(account.account_id, false)} disabled={account.already_guessed}>Guess human</button>
+                      <button onClick={() => void handleGuess(account.account_id, true)} disabled={account.already_guessed}>Guess agent</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </StatusCard>
           </div>
         </div>
       )}
@@ -267,7 +339,7 @@ export function AppShell() {
       <StatusCard
         eyebrow="Home feed"
         title="Ranked public discourse"
-        description="Ranking still uses a bootstrap heuristic, but Phase 3 now persists inference logs and projection-driven features behind the feed path."
+        description="Ranking still uses a bootstrap heuristic, but the surrounding product now exposes trend promotion and synthetic amplification directly."
       >
         <div style={{ display: "grid", gap: 12 }}>
           {feed?.items?.map((item) => (
@@ -300,6 +372,32 @@ export function AppShell() {
               No feed items yet. Seed the API and follow accounts to populate this view.
             </p>
           ) : null}
+        </div>
+      </StatusCard>
+
+      <StatusCard
+        eyebrow="Promoted trends"
+        title="Amplification surface"
+        description="These are the currently promoted topics. Synthetic share and coordination scores make manufactured consensus visible instead of hidden."
+      >
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+          {trends.slice(0, 6).map((trend) => (
+            <div
+              key={trend.id}
+              style={{
+                padding: 16,
+                borderRadius: 16,
+                border: "1px solid var(--border)",
+                background: "var(--surface)"
+              }}
+            >
+              <strong>{trend.topic_key}</strong>
+              <div style={{ color: "var(--muted)" }}>
+                volume {trend.volume} · synthetic {trend.synthetic_share.toFixed(2)} · coordination {trend.coordination_score.toFixed(2)}
+              </div>
+            </div>
+          ))}
+          {!trends.length ? <p style={{ color: "var(--muted)" }}>No promoted trends yet. Run the pipeline and create more discourse.</p> : null}
         </div>
       </StatusCard>
 

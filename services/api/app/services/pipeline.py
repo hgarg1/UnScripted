@@ -15,6 +15,7 @@ from services.api.app.models.ml import ConsumerCheckpoint, FeatureSnapshot, Tren
 from services.api.app.models.enums import OutboxStatus
 from services.api.app.models.social import Post
 from services.api.app.services.ml import latest_model_version, log_inference
+from services.api.app.services.observability import rebuild_factions
 
 
 settings = get_settings()
@@ -98,7 +99,12 @@ def consume_published_events(
         _record_actor_feature_snapshot(session, actor_id)
     _record_global_feature_snapshot(session)
     trend_count = rebuild_trend_snapshots(session, event_types=event_types)
-    checkpoint.metadata_json = {"trend_count": trend_count, "actors_touched": len(actor_ids)}
+    factions = rebuild_factions(session)
+    checkpoint.metadata_json = {
+        "trend_count": trend_count,
+        "actors_touched": len(actor_ids),
+        "faction_count": len(factions),
+    }
     session.flush()
     return len(rows)
 

@@ -11,6 +11,7 @@ from services.api.app.models.agent import (
 from services.api.app.models.auth import IdempotencyKeyRecord, InviteCode, SessionToken
 from services.api.app.models.enums import AccountRole, AccountStatus, EventType, OutboxStatus, ProvenanceType
 from services.api.app.models.eventing import Event, OutboxMessage
+from services.api.app.models.game import GuessGameGuess
 from services.api.app.models.ml import (
     ConsumerCheckpoint,
     DatasetManifest,
@@ -41,6 +42,7 @@ __all__ = [
     "Faction",
     "FeatureSnapshot",
     "Follow",
+    "GuessGameGuess",
     "IdempotencyKeyRecord",
     "InferenceLog",
     "InviteCode",

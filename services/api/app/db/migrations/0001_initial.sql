@@ -346,3 +346,19 @@ CREATE INDEX IF NOT EXISTS ix_moderation_signals_content
 
 CREATE INDEX IF NOT EXISTS ix_moderation_signals_status_created_at
   ON moderation_signals(status, created_at);
+
+CREATE TABLE IF NOT EXISTS guess_game_guesses (
+  id varchar(36) PRIMARY KEY,
+  user_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_account_id varchar(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  guessed_is_agent boolean NOT NULL,
+  was_correct boolean NOT NULL,
+  created_at timestamptz NOT NULL,
+  UNIQUE (user_id, target_account_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_guess_game_guesses_user_created_at
+  ON guess_game_guesses(user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_guess_game_guesses_target_created_at
+  ON guess_game_guesses(target_account_id, created_at);

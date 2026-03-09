@@ -90,6 +90,37 @@ type InferenceLog = {
   created_at: string;
 };
 
+type ObservabilityMetric = {
+  key: string;
+  value: number;
+  label: string;
+};
+
+type ProvenanceSlice = {
+  scope: string;
+  human: number;
+  agent: number;
+  mixed: number;
+  system: number;
+};
+
+type RolloutState = {
+  registry_state: string;
+  count: number;
+};
+
+type FactionDetail = {
+  id: string;
+  name: string;
+  origin_type: string;
+  cohesion_score: number;
+  member_count: number;
+  avg_influence: number;
+  dominant_archetypes: string[];
+  sample_handles: string[];
+  scenario_mix: string[];
+};
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -128,6 +159,10 @@ export function AdminShell() {
   const [models, setModels] = useState<ModelVersion[]>([]);
   const [trends, setTrends] = useState<TrendSnapshot[]>([]);
   const [inferenceLogs, setInferenceLogs] = useState<InferenceLog[]>([]);
+  const [observabilityMetrics, setObservabilityMetrics] = useState<ObservabilityMetric[]>([]);
+  const [provenance, setProvenance] = useState<ProvenanceSlice[]>([]);
+  const [rollouts, setRollouts] = useState<RolloutState[]>([]);
+  const [factions, setFactions] = useState<FactionDetail[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentMemories, setAgentMemories] = useState<AgentMemory[]>([]);
   const [agentTurns, setAgentTurns] = useState<AgentTurnLog[]>([]);
@@ -160,7 +195,8 @@ export function AdminShell() {
         nextPrompts,
         nextRegistry,
         nextTrends,
-        nextLogs
+        nextLogs,
+        nextObservability
       ] = await Promise.all([
         apiFetch<{
           total_users: number;
@@ -176,7 +212,13 @@ export function AdminShell() {
         apiFetch<AgentPrompt[]>("/v1/admin/agent-prompts", activeToken),
         apiFetch<{ datasets: DatasetManifest[]; models: ModelVersion[] }>("/v1/admin/models", activeToken),
         apiFetch<TrendSnapshot[]>("/v1/admin/trends", activeToken),
-        apiFetch<InferenceLog[]>("/v1/admin/inference-logs", activeToken)
+        apiFetch<InferenceLog[]>("/v1/admin/inference-logs", activeToken),
+        apiFetch<{
+          metrics: ObservabilityMetric[];
+          provenance: ProvenanceSlice[];
+          rollouts: RolloutState[];
+          factions: FactionDetail[];
+        }>("/v1/admin/observability/overview", activeToken)
       ]);
       setOverview(nextOverview);
       setInvites(nextInvites);
@@ -188,6 +230,10 @@ export function AdminShell() {
       setModels(nextRegistry.models);
       setTrends(nextTrends);
       setInferenceLogs(nextLogs);
+      setObservabilityMetrics(nextObservability.metrics);
+      setProvenance(nextObservability.provenance);
+      setRollouts(nextObservability.rollouts);
+      setFactions(nextObservability.factions);
       if (!selectedAgentId && nextAgents.items.length) {
         setSelectedAgentId(nextAgents.items[0].id);
         void refreshAgentDetail(activeToken, nextAgents.items[0].id);
@@ -354,6 +400,18 @@ export function AdminShell() {
     }
   }
 
+  async function rebuildFactionMap() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/factions/rebuild", token, { method: "POST" });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "faction rebuild failed");
+    }
+  }
+
   return (
     <section style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 }}>
       <StatusCard
@@ -387,13 +445,33 @@ export function AdminShell() {
         ))}
       </div>
 
-      <StatusCard
-        eyebrow="Phase 3 pipeline"
-        title="Run projections and feature updates"
-        description="Relay the outbox, consume published events, rebuild trends, and refresh model-facing feature snapshots."
-      >
-        <button onClick={runPipelineCycle} disabled={!token}>Run pipeline cycle</button>
-      </StatusCard>
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Phase 4 pipeline"
+          title="Run projections and feature updates"
+          description="Relay the outbox, consume published events, rebuild trends, refresh faction assignments, and update observability state."
+        >
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={runPipelineCycle} disabled={!token}>Run pipeline cycle</button>
+            <button onClick={rebuildFactionMap} disabled={!token}>Rebuild factions</button>
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Observability"
+          title="Control-plane health"
+          description="These metrics expose event flow, inference volume, moderation load, and current synthetic pressure."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {observabilityMetrics.slice(0, 4).map((metric) => (
+              <div key={metric.key} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{metric.label}</strong>
+                <div style={{ color: "#5f5348" }}>{metric.value.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         <StatusCard
@@ -484,6 +562,60 @@ export function AdminShell() {
             <input value={newAgentArchetype} onChange={(event) => setNewAgentArchetype(event.target.value)} placeholder="Archetype" />
             <textarea value={newAgentBio} onChange={(event) => setNewAgentBio(event.target.value)} rows={4} />
             <button onClick={createAgent} disabled={!token}>Create agent</button>
+          </div>
+        </StatusCard>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Factions"
+          title="Emergent cluster map"
+          description="Faction assignments are reconstructed from agent belief vectors and cohort scenario pressure."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {factions.slice(0, 6).map((faction) => (
+              <div key={faction.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{faction.name}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  members {faction.member_count} · cohesion {faction.cohesion_score.toFixed(2)} · influence {faction.avg_influence.toFixed(2)}
+                </div>
+                <div style={{ color: "#5f5348" }}>
+                  archetypes {faction.dominant_archetypes.join(", ") || "none"} · handles {faction.sample_handles.join(", ") || "none"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Provenance mix"
+          title="Human vs agent activity"
+          description="The dashboard now exposes how much of the current discourse is human, agent, mixed, or system-origin."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {provenance.map((slice) => (
+              <div key={slice.scope} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{slice.scope}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  human {slice.human} · agent {slice.agent} · mixed {slice.mixed} · system {slice.system}
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Rollouts"
+          title="Model registry state"
+          description="Model rollout state is surfaced directly in admin so canary, active, and shadow footprints are visible."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {rollouts.map((rollout) => (
+              <div key={rollout.registry_state} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{rollout.registry_state}</strong>
+                <div style={{ color: "#5f5348" }}>{rollout.count} models</div>
+              </div>
+            ))}
           </div>
         </StatusCard>
       </div>

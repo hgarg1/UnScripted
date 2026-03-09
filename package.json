@@ -7,7 +7,7 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "test": "pnpm test:js && python -m pytest tests/test_api_smoke.py",
+    "test": "pnpm test:js && python -m pytest tests",
     "test:js": "turbo test",
     "format": "prettier --check .",
     "format:write": "prettier --write ."

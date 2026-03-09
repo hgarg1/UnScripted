@@ -138,3 +138,88 @@ CREATE TABLE IF NOT EXISTS outbox_messages (
   available_at timestamptz NOT NULL,
   published_at timestamptz
 );
+
+CREATE TABLE IF NOT EXISTS agent_cohorts (
+  id varchar(36) PRIMARY KEY,
+  name varchar(120) NOT NULL UNIQUE,
+  description text NOT NULL,
+  scenario varchar(120) NOT NULL,
+  state varchar(32) NOT NULL,
+  cadence_multiplier double precision NOT NULL,
+  budget_multiplier double precision NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS factions (
+  id varchar(36) PRIMARY KEY,
+  name varchar(120) NOT NULL UNIQUE,
+  origin_type varchar(32) NOT NULL,
+  belief_centroid jsonb NOT NULL,
+  cohesion_score double precision NOT NULL,
+  visibility varchar(16) NOT NULL,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agents (
+  id varchar(36) PRIMARY KEY,
+  account_user_id varchar(36) NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  archetype varchar(64) NOT NULL,
+  persona_prompt_ref varchar(255) NOT NULL,
+  primary_cohort_id varchar(36) REFERENCES agent_cohorts(id) ON DELETE SET NULL,
+  faction_id varchar(36) REFERENCES factions(id) ON DELETE SET NULL,
+  belief_vector jsonb NOT NULL,
+  influence_score double precision NOT NULL,
+  cadence_policy jsonb NOT NULL,
+  budget_policy jsonb NOT NULL,
+  budget_state jsonb NOT NULL,
+  safety_policy jsonb NOT NULL,
+  state varchar(32) NOT NULL,
+  last_active_at timestamptz,
+  last_memory_compacted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS agent_prompt_versions (
+  id varchar(36) PRIMARY KEY,
+  name varchar(120) NOT NULL,
+  version integer NOT NULL,
+  system_prompt text NOT NULL,
+  planning_notes text NOT NULL,
+  style_guide text NOT NULL,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL,
+  UNIQUE (name, version)
+);
+
+CREATE TABLE IF NOT EXISTS agent_memories (
+  id varchar(36) PRIMARY KEY,
+  agent_id varchar(36) NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  memory_type varchar(32) NOT NULL,
+  summary text NOT NULL,
+  metadata_json jsonb NOT NULL,
+  importance_score double precision NOT NULL,
+  last_used_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS agent_cohort_memberships (
+  id varchar(36) PRIMARY KEY,
+  cohort_id varchar(36) NOT NULL REFERENCES agent_cohorts(id) ON DELETE CASCADE,
+  agent_id varchar(36) NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  role varchar(32) NOT NULL,
+  joined_at timestamptz NOT NULL,
+  UNIQUE (cohort_id, agent_id)
+);
+
+CREATE TABLE IF NOT EXISTS agent_turn_logs (
+  id varchar(36) PRIMARY KEY,
+  agent_id varchar(36) NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  action varchar(32) NOT NULL,
+  confidence double precision NOT NULL,
+  reason text NOT NULL,
+  generated_text text,
+  status varchar(32) NOT NULL,
+  token_cost integer NOT NULL,
+  output_ref_type varchar(32),
+  output_ref_id varchar(36),
+  created_at timestamptz NOT NULL
+);

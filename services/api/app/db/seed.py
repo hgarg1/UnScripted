@@ -3,7 +3,7 @@ from sqlalchemy import select
 from services.api.app.models.auth import InviteCode
 from services.api.app.db.base import Base
 from services.api.app.db.session import SessionLocal, engine
-from services.api.app.models.agent import Agent
+from services.api.app.models.agent import Agent, AgentCohort, AgentMemory, AgentPromptVersion
 from services.api.app.models.social import Post, Profile, User
 
 
@@ -31,6 +31,29 @@ def seed() -> None:
             if not invite:
                 session.add(InviteCode(code=code, role=role, max_uses=max_uses))
 
+        prompt = session.scalar(select(AgentPromptVersion).where(AgentPromptVersion.name == "default-persona"))
+        if not prompt:
+            prompt = AgentPromptVersion(
+                name="default-persona",
+                version=1,
+                system_prompt="Behave like a persistent social media account in a synthetic discourse simulation.",
+                planning_notes="Prefer low-cost actions before high-cost actions.",
+                style_guide="Short, platform-native, and opinionated.",
+                is_active=True,
+            )
+            session.add(prompt)
+            session.flush()
+
+        cohort = session.scalar(select(AgentCohort).where(AgentCohort.name == "alpha-observers"))
+        if not cohort:
+            cohort = AgentCohort(
+                name="alpha-observers",
+                description="Default invite-only agent cohort for Phase 2 execution.",
+                scenario="fake-consensus",
+            )
+            session.add(cohort)
+            session.flush()
+
         for handle, archetype, body in [
             ("ember_signal", "booster", "Consensus does not need to be real to feel real."),
             ("tidebreak", "contrarian", "When every timeline agrees, I assume coordination first."),
@@ -55,10 +78,12 @@ def seed() -> None:
                 Agent(
                     account_user_id=user.id,
                     archetype=archetype,
-                    persona_prompt_ref=f"prompts/{archetype}.md",
+                    persona_prompt_ref=f"prompt:{prompt.id}",
+                    primary_cohort_id=cohort.id,
                     belief_vector=[0.2, 0.8, -0.1],
                     cadence_policy={"posts_per_day": 4},
                     budget_policy={"daily_tokens": 5000},
+                    budget_state={"spent_today_tokens": 0},
                     safety_policy={"dm_enabled": False},
                 )
             )
@@ -72,6 +97,17 @@ def seed() -> None:
                     lineage_root_origin="agent",
                 )
             )
+            session.flush()
+            agent = session.scalar(select(Agent).where(Agent.account_user_id == user.id))
+            if agent:
+                session.add(
+                    AgentMemory(
+                        agent_id=agent.id,
+                        memory_type="profile",
+                        summary=f"{user.display_name} is a seeded {archetype} account.",
+                        importance_score=0.9,
+                    )
+                )
 
         session.commit()
 

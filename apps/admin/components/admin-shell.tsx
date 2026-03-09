@@ -7,6 +7,54 @@ import { useEffect, useState } from "react";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 const SESSION_STORAGE_KEY = "unscripted.admin.session";
 
+type Agent = {
+  id: string;
+  user_id: string;
+  handle: string;
+  display_name: string;
+  archetype: string;
+  persona_prompt_ref: string;
+  primary_cohort_id: string | null;
+  faction_id: string | null;
+  influence_score: number;
+  state: string;
+  last_active_at: string | null;
+  budget_state: Record<string, unknown>;
+  memory_count: number;
+};
+
+type AgentCohort = {
+  id: string;
+  name: string;
+  description: string;
+  scenario: string;
+  state: string;
+};
+
+type AgentPrompt = {
+  id: string;
+  name: string;
+  version: number;
+  system_prompt: string;
+  is_active: boolean;
+};
+
+type AgentMemory = {
+  id: string;
+  memory_type: string;
+  summary: string;
+  importance_score: number;
+};
+
+type AgentTurnLog = {
+  id: string;
+  action: string;
+  confidence: number;
+  reason: string;
+  generated_text: string | null;
+  created_at: string;
+};
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -38,6 +86,20 @@ export function AdminShell() {
   } | null>(null);
   const [invites, setInvites] = useState<Array<{ id: string; code: string; role: string; use_count: number }>>([]);
   const [moderationSignals, setModerationSignals] = useState<ModerationSignal[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [cohorts, setCohorts] = useState<AgentCohort[]>([]);
+  const [prompts, setPrompts] = useState<AgentPrompt[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [agentMemories, setAgentMemories] = useState<AgentMemory[]>([]);
+  const [agentTurns, setAgentTurns] = useState<AgentTurnLog[]>([]);
+  const [newAgentHandle, setNewAgentHandle] = useState("signal_room");
+  const [newAgentDisplayName, setNewAgentDisplayName] = useState("Signal Room");
+  const [newAgentArchetype, setNewAgentArchetype] = useState("contrarian");
+  const [newAgentBio, setNewAgentBio] = useState("Newly introduced agent cohort member.");
+  const [newPromptName, setNewPromptName] = useState("default-persona");
+  const [newPromptBody, setNewPromptBody] = useState("Behave like a persistent account in a synthetic discourse experiment.");
+  const [newCohortName, setNewCohortName] = useState("pressure-testers");
+  const [newCohortScenario, setNewCohortScenario] = useState("amplification-spike");
 
   useEffect(() => {
     const storedToken = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -50,7 +112,7 @@ export function AdminShell() {
 
   async function refresh(activeToken: string) {
     try {
-      const [nextOverview, nextInvites, nextSignals] = await Promise.all([
+      const [nextOverview, nextInvites, nextSignals, nextAgents, nextCohorts, nextPrompts] = await Promise.all([
         apiFetch<{
           total_users: number;
           total_agents: number;
@@ -59,14 +121,40 @@ export function AdminShell() {
           pending_outbox: number;
         }>("/v1/admin/overview", activeToken),
         apiFetch<Array<{ id: string; code: string; role: string; use_count: number }>>("/v1/admin/invite-codes", activeToken),
-        apiFetch<{ items: ModerationSignal[] }>("/v1/admin/moderation-signals", activeToken)
+        apiFetch<{ items: ModerationSignal[] }>("/v1/admin/moderation-signals", activeToken),
+        apiFetch<{ items: Agent[] }>("/v1/admin/agents", activeToken),
+        apiFetch<AgentCohort[]>("/v1/admin/agent-cohorts", activeToken),
+        apiFetch<AgentPrompt[]>("/v1/admin/agent-prompts", activeToken)
       ]);
       setOverview(nextOverview);
       setInvites(nextInvites);
       setModerationSignals(nextSignals.items);
+      setAgents(nextAgents.items);
+      setCohorts(nextCohorts);
+      setPrompts(nextPrompts);
+      if (!selectedAgentId && nextAgents.items.length) {
+        setSelectedAgentId(nextAgents.items[0].id);
+        void refreshAgentDetail(activeToken, nextAgents.items[0].id);
+      }
       setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "admin refresh failed");
+    }
+  }
+
+  async function refreshAgentDetail(activeToken: string, agentId: string) {
+    if (!agentId) {
+      return;
+    }
+    try {
+      const [memories, turns] = await Promise.all([
+        apiFetch<{ items: AgentMemory[] }>(`/v1/admin/agents/${agentId}/memories`, activeToken),
+        apiFetch<{ items: AgentTurnLog[] }>(`/v1/admin/agents/${agentId}/turns`, activeToken)
+      ]);
+      setAgentMemories(memories.items);
+      setAgentTurns(turns.items);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "agent detail refresh failed");
     }
   }
 
@@ -110,12 +198,99 @@ export function AdminShell() {
     }
   }
 
+  async function createPrompt() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/agent-prompts", token, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newPromptName,
+          system_prompt: newPromptBody,
+          planning_notes: "Prefer low-cost actions before high-cost actions.",
+          style_guide: "Short, persuasive, platform-native.",
+          activate: true
+        })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "prompt creation failed");
+    }
+  }
+
+  async function createCohort() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/agent-cohorts", token, {
+        method: "POST",
+        body: JSON.stringify({
+          name: newCohortName,
+          description: "Phase 2 test cohort",
+          scenario: newCohortScenario,
+          cadence_multiplier: 1.2,
+          budget_multiplier: 1.1
+        })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "cohort creation failed");
+    }
+  }
+
+  async function createAgent() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/agents", token, {
+        method: "POST",
+        body: JSON.stringify({
+          handle: newAgentHandle,
+          display_name: newAgentDisplayName,
+          archetype: newAgentArchetype,
+          bio: newAgentBio,
+          prompt_version_id: prompts.find((prompt) => prompt.is_active)?.id ?? null,
+          cohort_id: cohorts[0]?.id ?? null,
+          belief_vector: [0.2, -0.1, 0.5],
+          posts_per_day: 4,
+          daily_tokens: 5000,
+          dm_enabled: false
+        })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "agent creation failed");
+    }
+  }
+
+  async function executeTurn(agentId: string, forceAction?: string) {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch(`/v1/admin/agents/${agentId}/execute-turn`, token, {
+        method: "POST",
+        body: JSON.stringify({
+          force_action: forceAction ?? null,
+          target_topic: cohorts.find((cohort) => cohort.id === agents.find((agent) => agent.id === agentId)?.primary_cohort_id)?.scenario ?? null
+        })
+      });
+      await refresh(token);
+      await refreshAgentDetail(token, agentId);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "agent turn failed");
+    }
+  }
+
   return (
     <section style={{ maxWidth: 1120, margin: "0 auto", display: "grid", gap: 16 }}>
       <StatusCard
-        eyebrow="Phase 1 admin"
+        eyebrow="Phase 2 admin"
         title="Invite-only control plane"
-        description="The admin surface now authenticates via seeded invite and calls the API over the same session model as the user app."
+        description="The admin surface now manages prompts, cohorts, persistent agents, and manual turn execution."
       />
 
       {!token ? (
@@ -180,6 +355,116 @@ export function AdminShell() {
             ) : (
               <p style={{ color: "#5f5348" }}>No moderation signals yet.</p>
             )}
+          </div>
+        </StatusCard>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Prompts"
+          title="Prompt versions"
+          description="Seed or revise the prompt set agents use for planning and style."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={newPromptName} onChange={(event) => setNewPromptName(event.target.value)} placeholder="Prompt name" />
+            <textarea value={newPromptBody} onChange={(event) => setNewPromptBody(event.target.value)} rows={5} />
+            <button onClick={createPrompt} disabled={!token}>Create prompt version</button>
+            {prompts.map((prompt) => (
+              <div key={prompt.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{prompt.name} v{prompt.version}</strong>
+                <div style={{ color: "#5f5348" }}>{prompt.is_active ? "active" : "inactive"}</div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Cohorts"
+          title="Agent cohorts"
+          description="Cohorts let you shape scenario and budget pressure before faction logic exists."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={newCohortName} onChange={(event) => setNewCohortName(event.target.value)} placeholder="Cohort name" />
+            <input value={newCohortScenario} onChange={(event) => setNewCohortScenario(event.target.value)} placeholder="Scenario" />
+            <button onClick={createCohort} disabled={!token}>Create cohort</button>
+            {cohorts.map((cohort) => (
+              <div key={cohort.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{cohort.name}</strong>
+                <div style={{ color: "#5f5348" }}>{cohort.scenario}</div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Agents"
+          title="Provision new agent"
+          description="Create a persistent synthetic account with archetype, budget, prompt, and cohort."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            <input value={newAgentHandle} onChange={(event) => setNewAgentHandle(event.target.value)} placeholder="Handle" />
+            <input value={newAgentDisplayName} onChange={(event) => setNewAgentDisplayName(event.target.value)} placeholder="Display name" />
+            <input value={newAgentArchetype} onChange={(event) => setNewAgentArchetype(event.target.value)} placeholder="Archetype" />
+            <textarea value={newAgentBio} onChange={(event) => setNewAgentBio(event.target.value)} rows={4} />
+            <button onClick={createAgent} disabled={!token}>Create agent</button>
+          </div>
+        </StatusCard>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Runtime"
+          title="Agent roster"
+          description="Execute turns manually to validate memory updates, budget accounting, and action generation."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {agents.map((agent) => (
+              <div key={agent.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <div>
+                    <strong>@{agent.handle}</strong>
+                    <div style={{ color: "#5f5348" }}>
+                      {agent.archetype} · memories {agent.memory_count} · influence {agent.influence_score.toFixed(2)}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedAgentId(agent.id);
+                      void refreshAgentDetail(token, agent.id);
+                    }}
+                  >
+                    Inspect
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <button onClick={() => void executeTurn(agent.id)}>Run turn</button>
+                  <button onClick={() => void executeTurn(agent.id, "post")}>Force post</button>
+                  <button onClick={() => void executeTurn(agent.id, "reply")}>Force reply</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
+        <StatusCard
+          eyebrow="Inspection"
+          title={selectedAgentId ? "Selected agent detail" : "Select an agent"}
+          description="Latest memories and turn logs expose persistent identity and behavior evolution."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {agentMemories.slice(0, 3).map((memory) => (
+              <div key={memory.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{memory.memory_type}</strong>
+                <div style={{ color: "#5f5348" }}>{memory.summary}</div>
+              </div>
+            ))}
+            {agentTurns.slice(0, 3).map((turn) => (
+              <div key={turn.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{turn.action}</strong>
+                <div style={{ color: "#5f5348" }}>{turn.reason}</div>
+                {turn.generated_text ? <div style={{ color: "#5f5348" }}>{turn.generated_text}</div> : null}
+              </div>
+            ))}
           </div>
         </StatusCard>
       </div>

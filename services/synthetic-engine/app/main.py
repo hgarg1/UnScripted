@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
+from ml.common.agent_planner import AgentTurnContext as PlannerContext
+from ml.common.agent_planner import estimate_token_cost, generate_text, plan_turn
 from services.api.app.core.config import get_settings
 
 
@@ -25,6 +27,12 @@ class AgentTurnPlan(BaseModel):
     reason: str
 
 
+class AgentGeneratedContent(BaseModel):
+    action: str
+    text: str
+    token_cost: int
+
+
 def _check_service_token(service_token: str | None) -> None:
     if service_token != settings.service_token:
         raise HTTPException(status_code=401, detail="invalid service token")
@@ -41,38 +49,45 @@ def plan_agent_turn(
     x_unscripted_service_token: str | None = Header(default=None, alias="x-unscripted-service-token"),
 ) -> AgentTurnPlan:
     _check_service_token(x_unscripted_service_token)
-
-    if payload.available_budget_tokens <= 0:
-        return AgentTurnPlan(
-            action="disengage",
-            confidence=1.0,
-            should_generate_text=False,
-            reason="budget exhausted",
-        )
-    if payload.pending_mentions > 0 and payload.trust_delta >= 0:
-        return AgentTurnPlan(
-            action="reply",
-            confidence=0.82,
-            should_generate_text=True,
-            reason="mentions pending and trust is non-negative",
-        )
-    if payload.hostility_delta > 0.6:
-        return AgentTurnPlan(
-            action="escalate",
-            confidence=0.7,
-            should_generate_text=True,
-            reason="hostility threshold exceeded",
-        )
-    if payload.influence_score < 0.15:
-        return AgentTurnPlan(
-            action="like",
-            confidence=0.65,
-            should_generate_text=False,
-            reason="low influence agents amplify before posting",
-        )
-    return AgentTurnPlan(
-        action="post",
-        confidence=0.74,
-        should_generate_text=True,
-        reason="default cadence favors original posting",
+    planner_context = PlannerContext(
+        agent_id=payload.agent_id,
+        handle=payload.agent_id,
+        archetype="unspecified",
+        influence_score=payload.influence_score,
+        available_budget_tokens=payload.available_budget_tokens,
+        pending_mentions=payload.pending_mentions,
+        recent_engagement=0,
+        trust_delta=payload.trust_delta,
+        hostility_delta=payload.hostility_delta,
+        target_topic=payload.target_topic,
     )
+    plan = plan_turn(planner_context)
+    return AgentTurnPlan(
+        action=plan.action,
+        confidence=plan.confidence,
+        should_generate_text=plan.should_generate_text,
+        reason=plan.reason,
+    )
+
+
+@app.post("/v1/agents/generate-content", response_model=AgentGeneratedContent)
+def generate_agent_content(
+    payload: AgentTurnContext,
+    x_unscripted_service_token: str | None = Header(default=None, alias="x-unscripted-service-token"),
+) -> AgentGeneratedContent:
+    _check_service_token(x_unscripted_service_token)
+    planner_context = PlannerContext(
+        agent_id=payload.agent_id,
+        handle=payload.agent_id,
+        archetype="unspecified",
+        influence_score=payload.influence_score,
+        available_budget_tokens=payload.available_budget_tokens,
+        pending_mentions=payload.pending_mentions,
+        recent_engagement=0,
+        trust_delta=payload.trust_delta,
+        hostility_delta=payload.hostility_delta,
+        target_topic=payload.target_topic,
+    )
+    plan = plan_turn(planner_context)
+    text = generate_text(planner_context, plan)
+    return AgentGeneratedContent(action=plan.action, text=text, token_cost=estimate_token_cost(plan, text))

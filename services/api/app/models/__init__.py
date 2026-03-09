@@ -1,4 +1,13 @@
-from services.api.app.models.agent import Agent, Faction, Relationship
+from services.api.app.models.agent import (
+    Agent,
+    AgentCohort,
+    AgentCohortMembership,
+    AgentMemory,
+    AgentPromptVersion,
+    AgentTurnLog,
+    Faction,
+    Relationship,
+)
 from services.api.app.models.auth import IdempotencyKeyRecord, InviteCode, SessionToken
 from services.api.app.models.enums import AccountRole, AccountStatus, EventType, OutboxStatus, ProvenanceType
 from services.api.app.models.eventing import Event, OutboxMessage
@@ -9,6 +18,11 @@ __all__ = [
     "AccountRole",
     "AccountStatus",
     "Agent",
+    "AgentCohort",
+    "AgentCohortMembership",
+    "AgentMemory",
+    "AgentPromptVersion",
+    "AgentTurnLog",
     "Comment",
     "DM",
     "Event",

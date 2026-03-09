@@ -1,0 +1,15 @@
+{
+  "name": "@unscripted/contracts",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "node -e \"console.log('no contract tests configured yet')\""
+  },
+  "dependencies": {
+    "zod": "^3.24.2"
+  }
+}

@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "unscripted"
+version = "0.1.0"
+description = "Control-plane and compute-plane foundations for the UnScripted platform."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "boto3>=1.37.0",
+  "fastapi>=0.115.12",
+  "httpx>=0.28.1",
+  "numpy>=2.2.4",
+  "orjson>=3.10.16",
+  "pgvector>=0.3.6",
+  "psycopg[binary]>=3.2.6",
+  "pydantic-settings>=2.8.1",
+  "python-json-logger>=3.3.0",
+  "redis>=5.2.1",
+  "sqlalchemy>=2.0.39",
+  "temporalio>=1.10.0",
+  "uvicorn>=0.34.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.5",
+  "pytest-asyncio>=0.25.3",
+  "ruff>=0.11.0"
+]
+ml = [
+  "pandas>=2.2.3",
+  "pyarrow>=19.0.1",
+  "scikit-learn>=1.6.1"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["services", "workers", "ml"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

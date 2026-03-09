@@ -1,0 +1,21 @@
+{
+  "name": "unscripted",
+  "private": true,
+  "packageManager": "pnpm@10.26.1",
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "pnpm test:js && python -m pytest tests/test_api_smoke.py",
+    "test:js": "turbo test",
+    "format": "prettier --check .",
+    "format:write": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.5.3",
+    "turbo": "^2.5.1",
+    "typescript": "^5.8.2"
+  }
+}

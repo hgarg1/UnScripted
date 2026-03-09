@@ -1,0 +1,24 @@
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from services.api.app.api.routes.health import router as health_router
+from services.api.app.api.routes.social import router as social_router
+from services.api.app.core.config import get_settings
+from services.api.app.db.base import Base
+from services.api.app.db.session import engine
+
+
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    if settings.auto_create_schema:
+        Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title=settings.api_title, lifespan=lifespan)
+app.include_router(health_router)
+app.include_router(social_router)

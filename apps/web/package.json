@@ -1,0 +1,22 @@
+{
+  "name": "@unscripted/web",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node -e \"console.log('no web tests configured yet')\""
+  },
+  "dependencies": {
+    "@unscripted/contracts": "workspace:*",
+    "@unscripted/ui": "workspace:*",
+    "next": "^15.3.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12",
+    "@types/react-dom": "^19.0.5"
+  }
+}

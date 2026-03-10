@@ -22,9 +22,12 @@ class Settings(BaseSettings):
     object_storage_secret_key: str = "minioadmin"
     object_storage_bucket: str = "unscripted"
     temporal_target: str = "localhost:7233"
+    temporal_task_queue: str = "unscripted-control-plane"
     auth_dev_subject: str = "dev-user"
     auth_dev_handle: str = "architect"
     service_token: str = "replace-me"
+    agent_daily_token_hard_cap: int = 12000
+    cohort_daily_token_hard_cap: int = 100000
     sentry_dsn: str | None = None
     api_title: str = "UnScripted API"
     auto_create_schema: bool = True

@@ -397,6 +397,21 @@ CREATE TABLE IF NOT EXISTS calibration_snapshots (
   created_at timestamptz NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS control_plane_jobs (
+  id varchar(36) PRIMARY KEY,
+  workflow_name varchar(120) NOT NULL,
+  job_type varchar(64) NOT NULL,
+  status varchar(32) NOT NULL,
+  target_ref varchar(120) NOT NULL,
+  requested_by varchar(120) NOT NULL,
+  payload_json jsonb NOT NULL,
+  result_json jsonb NOT NULL,
+  error_message text,
+  started_at timestamptz,
+  finished_at timestamptz,
+  created_at timestamptz NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS ix_experiment_runs_state_created_at
   ON experiment_runs(state, created_at);
 
@@ -411,3 +426,12 @@ CREATE INDEX IF NOT EXISTS ix_scenario_injections_target_cohort
 
 CREATE INDEX IF NOT EXISTS ix_calibration_snapshots_model_created_at
   ON calibration_snapshots(model_name, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_control_plane_jobs_status_created_at
+  ON control_plane_jobs(status, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_control_plane_jobs_workflow_created_at
+  ON control_plane_jobs(workflow_name, created_at);
+
+CREATE INDEX IF NOT EXISTS ix_control_plane_jobs_target_ref_created_at
+  ON control_plane_jobs(target_ref, created_at);

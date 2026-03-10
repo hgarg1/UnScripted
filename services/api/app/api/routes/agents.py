@@ -29,8 +29,9 @@ from services.api.app.schemas.agents import (
     CreateAgentRequest,
     ExecuteAgentTurnRequest,
 )
-from services.api.app.services.agents import create_agent, execute_agent_turn, list_agents
+from services.api.app.services.agents import create_agent, list_agents
 from services.api.app.services.auth import get_current_user
+from services.api.app.services.simulation import run_agent_turn_job
 
 router = APIRouter(prefix="/v1/admin", tags=["agents"])
 
@@ -189,9 +190,10 @@ def execute_turn(
 ) -> AgentExecutionResponse:
     _require_admin(current_user)
     try:
-        result = execute_agent_turn(
+        _, result = run_agent_turn_job(
             session,
             agent_id=agent_id,
+            requested_by=current_user.id,
             force_action=payload.force_action,
             target_topic=payload.target_topic,
         )

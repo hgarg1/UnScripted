@@ -1,0 +1,54 @@
+{
+  "title": "UnScripted Control Plane Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "Pending Outbox Messages",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "unscripted_outbox_pending"
+        }
+      ]
+    },
+    {
+      "title": "Consumer Lag Seconds",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "unscripted_consumer_lag_seconds"
+        }
+      ]
+    },
+    {
+      "title": "Control Plane Jobs by Status",
+      "type": "bargauge",
+      "targets": [
+        {
+          "expr": "sum by (status) (unscripted_control_plane_jobs_total)"
+        }
+      ]
+    },
+    {
+      "title": "Agent Turn Blocks",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(unscripted_agent_turn_blocks_total[5m]))"
+        }
+      ]
+    },
+    {
+      "title": "Calibration Sample Size",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "unscripted_calibration_sample_size"
+        }
+      ]
+    }
+  ]
+}

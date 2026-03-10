@@ -1,0 +1,38 @@
+groups:
+  - name: unscripted-control-plane
+    rules:
+      - alert: UnscriptedOutboxBacklogHigh
+        expr: unscripted_outbox_pending > 100
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Outbox backlog is elevated
+          description: Pending outbox messages have remained above 100 for 10 minutes.
+
+      - alert: UnscriptedConsumerLagCritical
+        expr: unscripted_consumer_lag_seconds > 120
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Event consumer lag is critical
+          description: The projection consumer is more than 2 minutes behind.
+
+      - alert: UnscriptedCalibrationStale
+        expr: time() - unscripted_last_calibration_timestamp_seconds > 21600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Calibration is stale
+          description: No managed calibration has completed in the last 6 hours.
+
+      - alert: UnscriptedAgentBudgetBlocking
+        expr: sum(rate(unscripted_agent_turn_blocks_total[15m])) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Agent turns are being budget-blocked
+          description: Agent or cohort hard caps are suppressing a sustained portion of turns.

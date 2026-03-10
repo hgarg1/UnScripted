@@ -11,7 +11,7 @@ from services.api.app.models.agent import Agent, AgentCohort, AgentMemory
 from services.api.app.models.common import utc_now
 from services.api.app.models.eventing import Event
 from services.api.app.models.ml import InferenceLog, ModelEvaluation, ModelVersion
-from services.api.app.models.simulation import CalibrationSnapshot, ExperimentRun, ScenarioInjection
+from services.api.app.models.simulation import CalibrationSnapshot, ControlPlaneJob, ExperimentRun, ScenarioInjection
 from services.api.app.models.social import User
 from services.api.app.services.events import append_event
 
@@ -36,6 +36,58 @@ def create_experiment_run(
     session.add(experiment)
     session.flush()
     return experiment
+
+
+def list_control_plane_jobs(session: Session, *, limit: int = 50) -> list[ControlPlaneJob]:
+    return list(
+        session.scalars(select(ControlPlaneJob).order_by(ControlPlaneJob.created_at.desc()).limit(limit))
+    )
+
+
+def create_control_plane_job(
+    session: Session,
+    *,
+    workflow_name: str,
+    job_type: str,
+    target_ref: str,
+    requested_by: str,
+    payload_json: dict,
+) -> ControlPlaneJob:
+    job = ControlPlaneJob(
+        workflow_name=workflow_name,
+        job_type=job_type,
+        target_ref=target_ref,
+        requested_by=requested_by,
+        payload_json=payload_json,
+        result_json={},
+    )
+    session.add(job)
+    session.flush()
+    return job
+
+
+def mark_control_plane_job_running(session: Session, *, job: ControlPlaneJob) -> ControlPlaneJob:
+    job.status = "running"
+    job.started_at = utc_now()
+    session.flush()
+    return job
+
+
+def complete_control_plane_job(session: Session, *, job: ControlPlaneJob, result_json: dict) -> ControlPlaneJob:
+    job.status = "completed"
+    job.result_json = result_json
+    job.finished_at = utc_now()
+    job.error_message = None
+    session.flush()
+    return job
+
+
+def fail_control_plane_job(session: Session, *, job: ControlPlaneJob, error_message: str) -> ControlPlaneJob:
+    job.status = "failed"
+    job.error_message = error_message
+    job.finished_at = utc_now()
+    session.flush()
+    return job
 
 
 def create_scenario_injection(
@@ -190,6 +242,91 @@ def run_micro_batch_calibration(session: Session, *, model_name: str) -> Calibra
     return snapshot
 
 
+def run_calibration_job(
+    session: Session,
+    *,
+    model_name: str,
+    requested_by: str,
+    include_report: bool = True,
+    job_id: str | None = None,
+) -> tuple[ControlPlaneJob, CalibrationSnapshot, ModelEvaluation | None]:
+    job = session.get(ControlPlaneJob, job_id) if job_id else None
+    if job is None:
+        job = create_control_plane_job(
+            session,
+            workflow_name="calibration-sweep",
+            job_type="model-calibration",
+            target_ref=model_name,
+            requested_by=requested_by,
+            payload_json={"model_name": model_name, "include_report": include_report},
+        )
+    mark_control_plane_job_running(session, job=job)
+    try:
+        snapshot = run_micro_batch_calibration(session, model_name=model_name)
+        evaluation = create_advanced_evaluation_report(session, model_name=model_name) if include_report else None
+        complete_control_plane_job(
+            session,
+            job=job,
+            result_json={
+                "model_name": model_name,
+                "calibration_id": snapshot.id,
+                "evaluation_id": evaluation.id if evaluation else None,
+                "sample_size": snapshot.calibration_json.get("sample_size", 0),
+            },
+        )
+        return job, snapshot, evaluation
+    except Exception as exc:
+        fail_control_plane_job(session, job=job, error_message=str(exc))
+        raise
+
+
+def run_agent_turn_job(
+    session: Session,
+    *,
+    agent_id: str,
+    requested_by: str,
+    force_action: str | None = None,
+    target_topic: str | None = None,
+    job_id: str | None = None,
+) -> tuple[ControlPlaneJob, object]:
+    from services.api.app.services.agents import execute_agent_turn
+
+    job = session.get(ControlPlaneJob, job_id) if job_id else None
+    if job is None:
+        job = create_control_plane_job(
+            session,
+            workflow_name="agent-cadence",
+            job_type="agent-turn",
+            target_ref=agent_id,
+            requested_by=requested_by,
+            payload_json={"agent_id": agent_id, "force_action": force_action, "target_topic": target_topic},
+        )
+    mark_control_plane_job_running(session, job=job)
+    try:
+        result = execute_agent_turn(
+            session,
+            agent_id=agent_id,
+            force_action=force_action,
+            target_topic=target_topic,
+        )
+        complete_control_plane_job(
+            session,
+            job=job,
+            result_json={
+                "agent_id": agent_id,
+                "turn_log_id": result.log.id,
+                "turn_status": result.log.status,
+                "action": result.log.action,
+                "output_ref_type": result.log.output_ref_type,
+                "output_ref_id": result.log.output_ref_id,
+            },
+        )
+        return job, result
+    except Exception as exc:
+        fail_control_plane_job(session, job=job, error_message=str(exc))
+        raise
+
+
 def create_advanced_evaluation_report(session: Session, *, model_name: str) -> ModelEvaluation:
     model = session.scalar(
         select(ModelVersion)
@@ -238,6 +375,69 @@ def create_advanced_evaluation_report(session: Session, *, model_name: str) -> M
     return evaluation
 
 
+def run_experiment_tick_job(
+    session: Session,
+    *,
+    experiment_id: str,
+    requested_by: str,
+    include_followup_report: bool = False,
+    job_id: str | None = None,
+) -> tuple[ControlPlaneJob, ScenarioInjection]:
+    experiment = session.get(ExperimentRun, experiment_id)
+    if experiment is None:
+        raise ValueError("experiment not found")
+
+    job = session.get(ControlPlaneJob, job_id) if job_id else None
+    if job is None:
+        job = create_control_plane_job(
+            session,
+            workflow_name="scheduled-experiment",
+            job_type="experiment-tick",
+            target_ref=experiment.id,
+            requested_by=requested_by,
+            payload_json={"experiment_id": experiment.id, "include_followup_report": include_followup_report},
+        )
+    mark_control_plane_job_running(session, job=job)
+
+    try:
+        if experiment.state == "draft":
+            experiment.state = "active"
+            experiment.started_at = utc_now()
+
+        injection = _build_experiment_injection(
+            session,
+            experiment=experiment,
+            apply_now=True,
+        )
+        tick_count = int(experiment.metrics_json.get("ticks_run", 0)) + 1
+        experiment.metrics_json = {
+            **experiment.metrics_json,
+            "ticks_run": tick_count,
+            "last_tick_at": utc_now().isoformat(),
+            "last_job_id": job.id,
+            "last_injection_id": injection.id,
+        }
+        if include_followup_report:
+            target_model = str(experiment.configuration_json.get("target_model", "conversation-escalation"))
+            report = create_advanced_evaluation_report(session, model_name=target_model)
+            experiment.metrics_json["last_followup_evaluation_id"] = report.id
+
+        complete_control_plane_job(
+            session,
+            job=job,
+            result_json={
+                "experiment_id": experiment.id,
+                "injection_id": injection.id,
+                "ticks_run": tick_count,
+                "scenario_key": experiment.scenario_key,
+            },
+        )
+        return job, injection
+    except Exception as exc:
+        fail_control_plane_job(session, job=job, error_message=str(exc))
+        raise
+
+
 def latest_calibration(session: Session, *, model_name: str) -> CalibrationSnapshot | None:
     return session.scalar(
         select(CalibrationSnapshot)
@@ -260,6 +460,23 @@ def calibrated_score(session: Session, *, model_name: str, raw_score: float) -> 
     return calibrated
 
 
+def _build_experiment_injection(
+    session: Session,
+    *,
+    experiment: ExperimentRun,
+    apply_now: bool,
+) -> ScenarioInjection:
+    injection_type, payload_json = _derive_experiment_injection(experiment)
+    return create_scenario_injection(
+        session,
+        experiment_id=experiment.id,
+        target_cohort_id=experiment.target_cohort_id,
+        injection_type=injection_type,
+        payload_json=payload_json,
+        apply_now=apply_now,
+    )
+
+
 def _target_agents(session: Session, target_cohort_id: str | None) -> list[tuple[Agent, User, AgentCohort | None]]:
     stmt = select(Agent, User, AgentCohort).join(User, User.id == Agent.account_user_id).outerjoin(
         AgentCohort, AgentCohort.id == Agent.primary_cohort_id
@@ -277,3 +494,14 @@ def _apply_vector_delta(vector: list[float], delta: list[float]) -> list[float]:
         rhs = delta[idx] if idx < len(delta) else 0.0
         updated.append(round(lhs + rhs, 4))
     return updated
+
+
+def _derive_experiment_injection(experiment: ExperimentRun) -> tuple[str, dict]:
+    config = experiment.configuration_json or {}
+    if experiment.scenario_key == "escalation-pressure":
+        return "cadence-spike", {"multiplier": float(config.get("multiplier", 1.6))}
+    if experiment.scenario_key == "consensus-tilt":
+        return "belief-shift", {"delta": config.get("delta", [0.25, -0.05, 0.1])}
+    if experiment.scenario_key == "budget-surge":
+        return "budget-boost", {"delta_tokens": int(config.get("delta_tokens", 400))}
+    return "scenario-override", {"scenario": experiment.scenario_key}

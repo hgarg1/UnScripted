@@ -23,7 +23,7 @@ from services.api.app.models.ml import (
     TrendSnapshot,
 )
 from services.api.app.models.social import Comment, DM, Follow, Like, Post, Profile, Repost, User
-from services.api.app.models.simulation import CalibrationSnapshot, ExperimentRun, ScenarioInjection
+from services.api.app.models.simulation import CalibrationSnapshot, ControlPlaneJob, ExperimentRun, ScenarioInjection
 
 __all__ = [
     "AccountRole",
@@ -36,6 +36,7 @@ __all__ = [
     "AgentTurnLog",
     "Comment",
     "CalibrationSnapshot",
+    "ControlPlaneJob",
     "ConsumerCheckpoint",
     "DatasetManifest",
     "DM",

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ml.common.agent_planner import AgentTurnContext, AgentTurnPlan, estimate_token_cost, generate_text, plan_turn
 from ml.common.scoring import predict_escalation_risk
+from services.api.app.core import config as config_module
 from services.api.app.models.agent import (
     Agent,
     AgentCohort,
@@ -53,11 +54,66 @@ def _dominant_memory(session: Session, agent_id: str) -> str | None:
 
 
 def _available_budget(agent: Agent, cohort: AgentCohort | None) -> int:
+    _reset_budget_window(agent)
     daily_budget = int(agent.budget_policy.get("daily_tokens", 0))
     multiplier = cohort.budget_multiplier if cohort else 1.0
     effective_budget = int(daily_budget * multiplier)
     spent = int(agent.budget_state.get("spent_today_tokens", 0))
     return max(0, effective_budget - spent)
+
+
+def _reset_budget_window(agent: Agent) -> None:
+    today = datetime.now(UTC).date().isoformat()
+    last_reset = str(agent.budget_state.get("last_reset_date", ""))
+    if last_reset == today:
+        return
+    agent.budget_state = {
+        **agent.budget_state,
+        "spent_today_tokens": 0,
+        "last_reset_date": today,
+    }
+
+
+def _agent_hard_cap(agent: Agent, cohort: AgentCohort | None) -> int:
+    daily_budget = int(agent.budget_policy.get("daily_tokens", 0))
+    multiplier = cohort.budget_multiplier if cohort else 1.0
+    return max(0, min(int(daily_budget * multiplier), config_module.get_settings().agent_daily_token_hard_cap))
+
+
+def _cohort_spent_today(session: Session, cohort_id: str) -> int:
+    agent_ids = list(session.scalars(select(Agent.id).where(Agent.primary_cohort_id == cohort_id)))
+    if not agent_ids:
+        return 0
+    spent = session.scalar(
+        select(func.sum(AgentTurnLog.token_cost)).where(
+            AgentTurnLog.agent_id.in_(agent_ids),
+            AgentTurnLog.status == "completed",
+            AgentTurnLog.created_at >= datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0),
+        )
+    )
+    return int(spent or 0)
+
+
+def _blocked_turn(
+    session: Session,
+    *,
+    agent: Agent,
+    action: str,
+    reason: str,
+    token_cost: int = 0,
+) -> ExecutedAgentTurn:
+    log = AgentTurnLog(
+        agent_id=agent.id,
+        action=action,
+        confidence=1.0,
+        reason=reason,
+        generated_text=None,
+        status="blocked",
+        token_cost=token_cost,
+    )
+    session.add(log)
+    session.flush()
+    return ExecutedAgentTurn(log=log)
 
 
 def _pending_mentions(session: Session, user_id: str, last_active_at: datetime | None) -> int:
@@ -209,6 +265,8 @@ def execute_agent_turn(
     user = session.get(User, agent.account_user_id)
     if not user:
         raise ValueError("agent account missing")
+    cohort = session.get(AgentCohort, agent.primary_cohort_id) if agent.primary_cohort_id else None
+    _reset_budget_window(agent)
 
     context = _build_context(session, agent, user)
     if target_topic:
@@ -293,8 +351,45 @@ def execute_agent_turn(
             reason="forced by admin",
         )
 
+    current_spent = int(agent.budget_state.get("spent_today_tokens", 0))
+    hard_cap = _agent_hard_cap(agent, cohort)
+    if hard_cap <= current_spent:
+        return _blocked_turn(
+            session,
+            agent=agent,
+            action=plan.action,
+            reason=f"agent daily hard cap reached ({hard_cap} tokens)",
+        )
+
+    cohort_cap = config_module.get_settings().cohort_daily_token_hard_cap
+    cohort_spent = _cohort_spent_today(session, agent.primary_cohort_id) if agent.primary_cohort_id else 0
+    if agent.primary_cohort_id and cohort_spent >= cohort_cap:
+        return _blocked_turn(
+            session,
+            agent=agent,
+            action=plan.action,
+            reason=f"cohort daily hard cap reached ({cohort_cap} tokens)",
+        )
+
     generated = generate_text(context, plan) if plan.should_generate_text else None
     token_cost = estimate_token_cost(plan, generated or "")
+
+    if current_spent + token_cost > hard_cap:
+        return _blocked_turn(
+            session,
+            agent=agent,
+            action=plan.action,
+            reason=f"agent turn would exceed hard cap ({hard_cap} tokens)",
+            token_cost=token_cost,
+        )
+    if agent.primary_cohort_id and cohort_spent + token_cost > cohort_cap:
+        return _blocked_turn(
+            session,
+            agent=agent,
+            action=plan.action,
+            reason=f"cohort turn would exceed hard cap ({cohort_cap} tokens)",
+            token_cost=token_cost,
+        )
 
     output_ref_type = None
     output_ref_id = None
@@ -483,10 +578,9 @@ def execute_agent_turn(
     session.add(log)
     session.flush()
 
-    spent = int(agent.budget_state.get("spent_today_tokens", 0))
     agent.budget_state = {
         **agent.budget_state,
-        "spent_today_tokens": spent + token_cost,
+        "spent_today_tokens": current_spent + token_cost,
         "last_reset_date": agent.budget_state.get("last_reset_date", datetime.now(UTC).date().isoformat()),
     }
     agent.last_active_at = datetime.now(UTC)

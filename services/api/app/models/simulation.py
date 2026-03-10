@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, JSON, String
+from sqlalchemy import DateTime, ForeignKey, Index, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from services.api.app.db.base import Base
@@ -63,4 +63,26 @@ class CalibrationSnapshot(Base):
     window_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     calibration_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     drift_summary_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+
+class ControlPlaneJob(Base):
+    __tablename__ = "control_plane_jobs"
+    __table_args__ = (
+        Index("ix_control_plane_jobs_status_created_at", "status", "created_at"),
+        Index("ix_control_plane_jobs_workflow_created_at", "workflow_name", "created_at"),
+        Index("ix_control_plane_jobs_target_ref_created_at", "target_ref", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    workflow_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)
+    target_ref: Mapped[str] = mapped_column(String(120), nullable=False)
+    requested_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    result_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

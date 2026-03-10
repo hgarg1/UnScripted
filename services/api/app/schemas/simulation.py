@@ -69,3 +69,46 @@ class AdvancedEvaluationResponse(BaseModel):
     eval_type: str
     metrics_json: dict
     decision: str
+
+
+class ControlPlaneJobResponse(BaseModel):
+    id: str
+    workflow_name: str
+    job_type: str
+    status: str
+    target_ref: str
+    requested_by: str
+    payload_json: dict
+    result_json: dict
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ManagedCalibrationRequest(BaseModel):
+    model_name: str = Field(min_length=3, max_length=120)
+    include_report: bool = True
+
+
+class ManagedExperimentTickRequest(BaseModel):
+    include_followup_report: bool = False
+
+
+class InternalAgentTurnRequest(BaseModel):
+    force_action: str | None = Field(default=None, max_length=32)
+    target_topic: str | None = Field(default=None, max_length=120)
+    job_id: str | None = None
+
+
+class InternalExperimentTickRequest(BaseModel):
+    job_id: str | None = None
+    include_followup_report: bool = False
+
+
+class InternalCalibrationRunRequest(BaseModel):
+    model_name: str = Field(min_length=3, max_length=120)
+    include_report: bool = True
+    job_id: str | None = None

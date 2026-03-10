@@ -145,6 +145,18 @@ type CalibrationSnapshot = {
   drift_summary_json: Record<string, number | string>;
 };
 
+type ControlPlaneJob = {
+  id: string;
+  workflow_name: string;
+  job_type: string;
+  status: string;
+  target_ref: string;
+  requested_by: string;
+  result_json: Record<string, unknown>;
+  error_message: string | null;
+  created_at: string;
+};
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -190,6 +202,7 @@ export function AdminShell() {
   const [experiments, setExperiments] = useState<ExperimentRun[]>([]);
   const [injections, setInjections] = useState<ScenarioInjection[]>([]);
   const [calibrations, setCalibrations] = useState<CalibrationSnapshot[]>([]);
+  const [controlPlaneJobs, setControlPlaneJobs] = useState<ControlPlaneJob[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [agentMemories, setAgentMemories] = useState<AgentMemory[]>([]);
   const [agentTurns, setAgentTurns] = useState<AgentTurnLog[]>([]);
@@ -231,7 +244,8 @@ export function AdminShell() {
         nextObservability,
         nextExperiments,
         nextInjections,
-        nextCalibrations
+        nextCalibrations,
+        nextJobs
       ] = await Promise.all([
         apiFetch<{
           total_users: number;
@@ -256,7 +270,8 @@ export function AdminShell() {
         }>("/v1/admin/observability/overview", activeToken),
         apiFetch<ExperimentRun[]>("/v1/admin/experiments", activeToken),
         apiFetch<ScenarioInjection[]>("/v1/admin/scenario-injections", activeToken),
-        apiFetch<CalibrationSnapshot[]>("/v1/admin/calibrations", activeToken)
+        apiFetch<CalibrationSnapshot[]>("/v1/admin/calibrations", activeToken),
+        apiFetch<ControlPlaneJob[]>("/v1/admin/control-plane/jobs", activeToken)
       ]);
       setOverview(nextOverview);
       setInvites(nextInvites);
@@ -275,6 +290,7 @@ export function AdminShell() {
       setExperiments(nextExperiments);
       setInjections(nextInjections);
       setCalibrations(nextCalibrations);
+      setControlPlaneJobs(nextJobs);
       if (!selectedAgentId && nextAgents.items.length) {
         setSelectedAgentId(nextAgents.items[0].id);
         void refreshAgentDetail(activeToken, nextAgents.items[0].id);
@@ -500,13 +516,28 @@ export function AdminShell() {
       return;
     }
     try {
-      await apiFetch("/v1/admin/calibrations/run", token, {
+      await apiFetch("/v1/admin/calibrations/managed-run", token, {
         method: "POST",
-        body: JSON.stringify({ model_name: calibrationModelName })
+        body: JSON.stringify({ model_name: calibrationModelName, include_report: true })
       });
       await refresh(token);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "calibration failed");
+    }
+  }
+
+  async function runExperimentTick(experimentId: string) {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch(`/v1/admin/experiments/${experimentId}/tick`, token, {
+        method: "POST",
+        body: JSON.stringify({ include_followup_report: false })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "experiment tick failed");
     }
   }
 
@@ -692,6 +723,9 @@ export function AdminShell() {
               <div key={experiment.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
                 <strong>{experiment.name}</strong>
                 <div style={{ color: "#5f5348" }}>{experiment.scenario_key} · {experiment.state}</div>
+                <button style={{ marginTop: 8 }} onClick={() => void runExperimentTick(experiment.id)} disabled={!token}>
+                  Run tick
+                </button>
               </div>
             ))}
           </div>
@@ -793,6 +827,24 @@ export function AdminShell() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+        <StatusCard
+          eyebrow="Workflow ops"
+          title="Control-plane job ledger"
+          description="Managed agent turns, experiment ticks, and calibration runs now persist execution records for worker-facing visibility."
+        >
+          <div style={{ display: "grid", gap: 12 }}>
+            {controlPlaneJobs.slice(0, 6).map((job) => (
+              <div key={job.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+                <strong>{job.workflow_name}</strong>
+                <div style={{ color: "#5f5348" }}>
+                  {job.job_type} · {job.status} · {job.target_ref}
+                </div>
+                {job.error_message ? <div style={{ color: "#8a3b2e" }}>{job.error_message}</div> : null}
+              </div>
+            ))}
+          </div>
+        </StatusCard>
+
         <StatusCard
           eyebrow="Runtime"
           title="Agent roster"

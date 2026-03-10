@@ -1,0 +1,190 @@
+.cluster {
+  display: grid;
+  gap: var(--ui-space-6);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.9fr);
+  gap: var(--ui-space-6);
+}
+
+.heroCopy {
+  display: grid;
+  gap: var(--ui-space-5);
+}
+
+.eyebrowRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.heroTitle {
+  margin: 0;
+  font-size: clamp(3rem, 7vw, 5.4rem);
+  line-height: 0.92;
+  letter-spacing: -0.07em;
+}
+
+.heroBody {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 1.05rem;
+  line-height: 1.75;
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.smallGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.formGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.contentGrid {
+  display: grid;
+  gap: var(--ui-space-6);
+}
+
+.feedGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--ui-space-6);
+  align-items: start;
+}
+
+.feedStack,
+.railStack,
+.sectionStack {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+.stickyComposer {
+  position: sticky;
+  top: 100px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.rowSpread {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--ui-text-muted);
+}
+
+.subtle {
+  color: var(--ui-text-subtle);
+}
+
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-4);
+}
+
+.trendGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-space-4);
+}
+
+.mobileOnly {
+  display: none;
+}
+
+.desktopOnly {
+  display: block;
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.listItem {
+  padding-top: 12px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.commentStack {
+  display: grid;
+  gap: 12px;
+}
+
+.comment {
+  padding: 14px;
+  border-radius: var(--ui-radius-md);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--ui-border);
+}
+
+.threadLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: var(--ui-space-6);
+}
+
+.empty {
+  padding: 18px;
+  border-radius: var(--ui-radius-md);
+  border: 1px dashed var(--ui-border-strong);
+  color: var(--ui-text-muted);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+@media (max-width: 1180px) {
+  .feedGrid,
+  .threadLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 920px) {
+  .statsRow,
+  .kpiGrid,
+  .cardGrid,
+  .trendGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobileOnly {
+    display: block;
+  }
+
+  .desktopOnly {
+    display: none;
+  }
+}

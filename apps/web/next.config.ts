@@ -1,8 +1,9 @@
+import path from "node:path";
+
 const nextConfig = {
   transpilePackages: ["@unscripted/contracts", "@unscripted/ui"],
-  experimental: {
-    typedRoutes: true
-  }
+  typedRoutes: true,
+  outputFileTracingRoot: path.join(__dirname, "../.."),
 };
 
 export default nextConfig;

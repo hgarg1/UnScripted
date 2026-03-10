@@ -1,0 +1,138 @@
+.shell {
+  min-height: 100vh;
+}
+
+.inner {
+  max-width: var(--ui-max-width);
+  margin: 0 auto;
+  padding: var(--ui-space-6);
+  display: grid;
+  grid-template-columns: 252px minmax(0, var(--ui-main-width)) 320px;
+  gap: var(--ui-space-6);
+}
+
+.sidebar,
+.insight {
+  position: sticky;
+  top: var(--ui-space-6);
+  height: fit-content;
+}
+
+.sidebar {
+  display: grid;
+  gap: var(--ui-space-4);
+}
+
+.main {
+  min-width: 0;
+  display: grid;
+  gap: var(--ui-space-6);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ui-space-4);
+  padding: var(--ui-space-4) var(--ui-space-5);
+  border-radius: var(--ui-radius-lg);
+  border: 1px solid var(--ui-border);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--ui-shadow-card);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.brandMark {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--ui-primary), var(--ui-secondary));
+  box-shadow: 0 16px 28px rgba(37, 99, 235, 0.18);
+}
+
+.nav {
+  display: grid;
+  gap: 6px;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+  border-radius: 16px;
+  padding: 12px 14px;
+  color: var(--ui-text-muted);
+  transition:
+    background var(--ui-transition-fast),
+    color var(--ui-transition-fast),
+    transform var(--ui-transition-fast);
+}
+
+.navLink:hover {
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--ui-text);
+  transform: translateX(2px);
+}
+
+.navLinkActive {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--ui-primary-strong);
+}
+
+.sidebarFooter {
+  color: var(--ui-text-subtle);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.mobileNav {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .inner {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .insight {
+    display: none;
+  }
+}
+
+@media (max-width: 920px) {
+  .inner {
+    grid-template-columns: 1fr;
+    padding: var(--ui-space-4);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobileNav {
+    position: sticky;
+    bottom: 12px;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px;
+    border-radius: 22px;
+    border: 1px solid var(--ui-border);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(18px);
+    box-shadow: var(--ui-shadow-panel);
+  }
+
+  .mobileNav > * {
+    min-width: 0;
+  }
+}

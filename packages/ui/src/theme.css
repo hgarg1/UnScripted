@@ -1,0 +1,129 @@
+:root {
+  color-scheme: light;
+  --ui-font-sans: var(--font-geist-sans), "Segoe UI", sans-serif;
+  --ui-font-mono: var(--font-geist-mono), "SFMono-Regular", monospace;
+  --ui-font-display: var(--font-instrument-serif), var(--ui-font-sans);
+  --ui-bg: #f8fafc;
+  --ui-bg-muted: #f1f5f9;
+  --ui-surface: rgba(255, 255, 255, 0.84);
+  --ui-surface-strong: rgba(255, 255, 255, 0.96);
+  --ui-surface-elevated: #ffffff;
+  --ui-panel: rgba(255, 255, 255, 0.72);
+  --ui-text: #0f172a;
+  --ui-text-muted: #475569;
+  --ui-text-subtle: #64748b;
+  --ui-border: rgba(148, 163, 184, 0.28);
+  --ui-border-strong: rgba(148, 163, 184, 0.52);
+  --ui-primary: #2563eb;
+  --ui-primary-strong: #1d4ed8;
+  --ui-primary-soft: rgba(37, 99, 235, 0.12);
+  --ui-secondary: #06b6d4;
+  --ui-coral: #f97316;
+  --ui-success: #10b981;
+  --ui-warning: #f59e0b;
+  --ui-danger: #ef4444;
+  --ui-shadow-soft: 0 18px 60px rgba(15, 23, 42, 0.08);
+  --ui-shadow-panel: 0 24px 70px rgba(15, 23, 42, 0.1);
+  --ui-shadow-card: 0 14px 32px rgba(15, 23, 42, 0.08);
+  --ui-radius-sm: 12px;
+  --ui-radius-md: 18px;
+  --ui-radius-lg: 24px;
+  --ui-radius-pill: 999px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-8: 32px;
+  --ui-space-10: 40px;
+  --ui-space-12: 48px;
+  --ui-transition-fast: 160ms ease;
+  --ui-transition-panel: 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-max-width: 1440px;
+  --ui-main-width: 760px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--ui-text);
+  font-family: var(--ui-font-sans);
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(37, 99, 235, 0.12),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 82% 12%,
+      rgba(6, 182, 212, 0.12),
+      transparent 24%
+    ),
+    linear-gradient(180deg, #fbfdff 0%, #f5f8fc 42%, #eef3f8 100%);
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black, transparent 80%);
+  opacity: 0.2;
+}
+
+[data-app-surface="admin"] {
+  --ui-bg: #f5f7fb;
+  --ui-bg-muted: #eef2f7;
+  --ui-surface: rgba(255, 255, 255, 0.88);
+  --ui-panel: rgba(255, 255, 255, 0.9);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+::selection {
+  background: rgba(37, 99, 235, 0.16);
+}
+
+.ui-theme {
+  min-height: 100vh;
+}
+
+.ui-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

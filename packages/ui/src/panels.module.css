@@ -1,0 +1,131 @@
+.card,
+.panel,
+.metricCard {
+  border-radius: var(--ui-radius-lg);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--ui-shadow-card);
+}
+
+.card,
+.panel {
+  padding: var(--ui-space-6);
+}
+
+.metricCard {
+  padding: var(--ui-space-5);
+}
+
+.panelDense {
+  padding: var(--ui-space-5);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--ui-text-subtle);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.displayTitle {
+  font-family: var(--ui-font-display);
+  font-size: clamp(2rem, 4vw, 3.7rem);
+  line-height: 0.95;
+}
+
+.description {
+  margin: 10px 0 0;
+  color: var(--ui-text-muted);
+  line-height: 1.55;
+}
+
+.content {
+  margin-top: var(--ui-space-5);
+}
+
+.metricValue {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.metricLabel {
+  margin: 6px 0 0;
+  color: var(--ui-text-muted);
+}
+
+.tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--ui-radius-pill);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--ui-border);
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  color: var(--ui-text-muted);
+  padding: 10px 14px;
+  border-radius: var(--ui-radius-pill);
+  cursor: pointer;
+}
+
+.tabActive {
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+
+.drawerBackdrop,
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.3);
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.drawer,
+.modal {
+  position: fixed;
+  z-index: 51;
+  background: var(--ui-surface-strong);
+  border: 1px solid var(--ui-border);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.drawer {
+  top: 20px;
+  right: 20px;
+  bottom: 20px;
+  width: min(460px, calc(100vw - 24px));
+  border-radius: 28px;
+  padding: var(--ui-space-6);
+  overflow: auto;
+}
+
+.modal {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: 28px;
+  padding: var(--ui-space-6);
+}

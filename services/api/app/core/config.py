@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     env: str = "development"
     database_url: str = Field(
-        default="postgresql+psycopg://postgres:postgres@localhost:5432/unscripted"
+        default="postgresql+psycopg://postgres:postgres@localhost:5433/unscripted"
     )
     redis_url: str = "redis://localhost:6379/0"
     object_storage_endpoint: str = "http://localhost:9000"
@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     sentry_dsn: str | None = None
     api_title: str = "UnScripted API"
     auto_create_schema: bool = True
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3001",
+        ]
+    )
 
 
 @lru_cache(maxsize=1)

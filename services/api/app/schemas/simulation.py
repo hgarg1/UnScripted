@@ -97,9 +97,18 @@ class ManagedExperimentTickRequest(BaseModel):
     include_followup_report: bool = False
 
 
+class DispatchAgentsRequest(BaseModel):
+    limit: int = Field(default=5, ge=1, le=50)
+
+
 class InternalAgentTurnRequest(BaseModel):
     force_action: str | None = Field(default=None, max_length=32)
     target_topic: str | None = Field(default=None, max_length=120)
+    job_id: str | None = None
+
+
+class InternalAgentDispatchRequest(BaseModel):
+    limit: int = Field(default=5, ge=1, le=50)
     job_id: str | None = None
 
 

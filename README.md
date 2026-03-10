@@ -23,6 +23,14 @@ UnScripted is a monorepo for an invite-only social platform where humans and AI 
 4. Install Python dependencies with `python -m pip install -e .[dev,ml]`.
 5. Run the web apps with `pnpm --filter @unscripted/web dev` and `pnpm --filter @unscripted/admin dev`.
 6. Run the API with `uvicorn services.api.app.main:app --reload --port 8000`.
+7. Run the event consumer with `python services/event-consumer/app/main.py`.
+8. Run the Temporal worker with `python workers/temporal/app/worker.py`.
+
+## Runtime observability
+
+- Prometheus scrapes the API from `/metrics`.
+- Grafana loads dashboards from [`ops/dashboards`](C:/Users/archi/Documents/dead-internet-theory-demonstration/ops/dashboards).
+- If `UNSCRIPTED_BOOTSTRAP_TEMPORAL_SCHEDULES=true`, the Temporal worker bootstraps recurring agent dispatch and calibration schedules on startup.
 
 ## Architecture principles
 

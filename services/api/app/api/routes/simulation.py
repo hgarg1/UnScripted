@@ -14,7 +14,9 @@ from services.api.app.schemas.simulation import (
     ControlPlaneJobResponse,
     CreateExperimentRunRequest,
     CreateScenarioInjectionRequest,
+    DispatchAgentsRequest,
     ExperimentRunResponse,
+    InternalAgentDispatchRequest,
     InternalAgentTurnRequest,
     InternalCalibrationRunRequest,
     InternalExperimentTickRequest,
@@ -27,10 +29,10 @@ from services.api.app.services.auth import get_current_user
 from services.api.app.services.simulation import (
     apply_scenario_injection,
     create_advanced_evaluation_report,
-    create_control_plane_job,
     create_experiment_run,
     create_scenario_injection,
     list_control_plane_jobs,
+    run_agent_dispatch_job,
     run_micro_batch_calibration,
     run_agent_turn_job,
     run_calibration_job,
@@ -72,6 +74,22 @@ def get_control_plane_jobs(
     rows = list_control_plane_jobs(session)
     session.commit()
     return [ControlPlaneJobResponse.model_validate(row) for row in rows]
+
+
+@router.post("/agents/dispatch", response_model=ControlPlaneJobResponse, status_code=status.HTTP_201_CREATED)
+def dispatch_agents(
+    payload: DispatchAgentsRequest,
+    session: Session = Depends(get_db_session),
+    current_user: User = Depends(get_current_user),
+) -> ControlPlaneJobResponse:
+    _require_admin(current_user)
+    job, _ = run_agent_dispatch_job(
+        session,
+        requested_by=current_user.id,
+        limit=payload.limit,
+    )
+    session.commit()
+    return ControlPlaneJobResponse.model_validate(job)
 
 
 @router.post("/experiments", response_model=ExperimentRunResponse, status_code=status.HTTP_201_CREATED)
@@ -245,6 +263,23 @@ def run_internal_agent_turn(
         requested_by="service-temporal",
         force_action=payload.force_action,
         target_topic=payload.target_topic,
+        job_id=payload.job_id,
+    )
+    session.commit()
+    return ControlPlaneJobResponse.model_validate(job)
+
+
+@internal_router.post("/agents/dispatch", response_model=ControlPlaneJobResponse)
+def run_internal_agent_dispatch(
+    payload: InternalAgentDispatchRequest,
+    x_unscripted_service_token: str | None = Header(default=None, alias="x-unscripted-service-token"),
+    session: Session = Depends(get_db_session),
+) -> ControlPlaneJobResponse:
+    _require_service_token(x_unscripted_service_token)
+    job, _ = run_agent_dispatch_job(
+        session,
+        requested_by="service-temporal",
+        limit=payload.limit,
         job_id=payload.job_id,
     )
     session.commit()

@@ -78,6 +78,7 @@ services:
       - "3002:3000"
     volumes:
       - ./infra/docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
   postgres_data:

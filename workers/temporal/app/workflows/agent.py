@@ -5,6 +5,7 @@ from temporalio import workflow
 with workflow.unsafe.imports_passed_through():
     from workers.temporal.app.activities.agent import (
         execute_agent_turn_activity,
+        run_agent_dispatch_activity,
         run_calibration_activity,
         run_experiment_tick_activity,
     )
@@ -28,6 +29,17 @@ class RetrainModelWorkflow:
         return await workflow.execute_activity(
             run_calibration_activity,
             args=[model_name, include_report],
+            start_to_close_timeout=timedelta(seconds=60),
+        )
+
+
+@workflow.defn
+class AgentDispatchWorkflow:
+    @workflow.run
+    async def run(self, limit: int = 5) -> dict:
+        return await workflow.execute_activity(
+            run_agent_dispatch_activity,
+            args=[limit],
             start_to_close_timeout=timedelta(seconds=60),
         )
 

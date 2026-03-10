@@ -327,6 +327,67 @@ def run_agent_turn_job(
         raise
 
 
+def run_agent_dispatch_job(
+    session: Session,
+    *,
+    requested_by: str,
+    limit: int = 5,
+    job_id: str | None = None,
+) -> tuple[ControlPlaneJob, list[dict[str, str]]]:
+    from services.api.app.services.agents import execute_agent_turn
+
+    job = session.get(ControlPlaneJob, job_id) if job_id else None
+    if job is None:
+        job = create_control_plane_job(
+            session,
+            workflow_name="agent-dispatch",
+            job_type="agent-dispatch",
+            target_ref="agents:active",
+            requested_by=requested_by,
+            payload_json={"limit": limit},
+        )
+    mark_control_plane_job_running(session, job=job)
+
+    rows = list(
+        session.execute(
+            select(Agent, AgentCohort)
+            .outerjoin(AgentCohort, AgentCohort.id == Agent.primary_cohort_id)
+            .where(Agent.state == "active")
+            .order_by(Agent.last_active_at.asc(), Agent.influence_score.asc())
+            .limit(limit)
+        ).all()
+    )
+    dispatched: list[dict[str, str]] = []
+    try:
+        for agent, cohort in rows:
+            result = execute_agent_turn(
+                session,
+                agent_id=agent.id,
+                target_topic=cohort.scenario if cohort else None,
+            )
+            dispatched.append(
+                {
+                    "agent_id": agent.id,
+                    "turn_log_id": result.log.id,
+                    "status": result.log.status,
+                    "action": result.log.action,
+                }
+            )
+        complete_control_plane_job(
+            session,
+            job=job,
+            result_json={
+                "dispatch_count": len(dispatched),
+                "blocked_count": sum(1 for row in dispatched if row["status"] == "blocked"),
+                "turns": dispatched,
+            },
+        )
+        return job, dispatched
+    except Exception as exc:
+        fail_control_plane_job(session, job=job, error_message=str(exc))
+        raise
+
+
 def create_advanced_evaluation_report(session: Session, *, model_name: str) -> ModelEvaluation:
     model = session.scalar(
         select(ModelVersion)

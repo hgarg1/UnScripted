@@ -46,6 +46,14 @@ async def execute_agent_turn_activity(agent_id: str, force_action: str | None = 
 
 
 @activity.defn
+async def run_agent_dispatch_activity(limit: int = 5) -> dict:
+    return await _post(
+        "/v1/internal/control-plane/agents/dispatch",
+        {"limit": limit},
+    )
+
+
+@activity.defn
 async def run_experiment_tick_activity(
     experiment_id: str,
     include_followup_report: bool = False,

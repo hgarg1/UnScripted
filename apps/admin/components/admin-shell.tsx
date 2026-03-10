@@ -445,6 +445,21 @@ export function AdminShell() {
     }
   }
 
+  async function dispatchAgents() {
+    if (!token) {
+      return;
+    }
+    try {
+      await apiFetch("/v1/admin/agents/dispatch", token, {
+        method: "POST",
+        body: JSON.stringify({ limit: 5 })
+      });
+      await refresh(token);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "agent dispatch failed");
+    }
+  }
+
   async function runPipelineCycle() {
     if (!token) {
       return;
@@ -833,6 +848,7 @@ export function AdminShell() {
           description="Managed agent turns, experiment ticks, and calibration runs now persist execution records for worker-facing visibility."
         >
           <div style={{ display: "grid", gap: 12 }}>
+            <button onClick={dispatchAgents} disabled={!token}>Dispatch active agents</button>
             {controlPlaneJobs.slice(0, 6).map((job) => (
               <div key={job.id} style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
                 <strong>{job.workflow_name}</strong>

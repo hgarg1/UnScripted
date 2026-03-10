@@ -1,4 +1,5 @@
 import importlib
+import asyncio
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -96,6 +97,13 @@ def test_phase6_control_plane_jobs_and_budget_hard_caps(tmp_path: Path, monkeypa
         assert jobs.status_code == 200, jobs.text
         assert len(jobs.json()) >= 3
 
+        metrics = client.get("/metrics")
+        assert metrics.status_code == 200, metrics.text
+        assert "unscripted_outbox_pending" in metrics.text
+        assert "unscripted_control_plane_jobs_total" in metrics.text
+        assert "unscripted_agent_turn_blocks_total" in metrics.text
+        assert "unscripted_last_calibration_timestamp_seconds" in metrics.text
+
         with session_module.SessionLocal() as session:
             blocked_log = session.scalar(
                 select(AgentTurnLog).where(AgentTurnLog.agent_id == agent_id).order_by(AgentTurnLog.created_at.desc())
@@ -109,3 +117,27 @@ def test_phase6_control_plane_jobs_and_budget_hard_caps(tmp_path: Path, monkeypa
             assert any(row.workflow_name == "agent-cadence" for row in job_rows)
             assert any(row.workflow_name == "scheduled-experiment" for row in job_rows)
             assert any(row.workflow_name == "calibration-sweep" for row in job_rows)
+
+
+def test_temporal_schedule_bootstrap_registers_dispatch_and_calibration(monkeypatch) -> None:
+    monkeypatch.setenv("UNSCRIPTED_BOOTSTRAP_TEMPORAL_SCHEDULES", "true")
+    monkeypatch.setenv("UNSCRIPTED_AGENT_DISPATCH_INTERVAL_SECONDS", "30")
+    monkeypatch.setenv("UNSCRIPTED_CALIBRATION_INTERVAL_SECONDS", "600")
+
+    import services.api.app.core.config as config_module
+    import workers.temporal.app.worker as worker_module
+
+    importlib.reload(config_module)
+    importlib.reload(worker_module)
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.created_ids: list[str] = []
+
+        async def create_schedule(self, schedule_id: str, schedule) -> None:
+            self.created_ids.append(schedule_id)
+
+    fake_client = FakeClient()
+    asyncio.run(worker_module.bootstrap_schedules(fake_client))
+    assert "unscripted-agent-dispatch" in fake_client.created_ids
+    assert "unscripted-calibration-sweep" in fake_client.created_ids
